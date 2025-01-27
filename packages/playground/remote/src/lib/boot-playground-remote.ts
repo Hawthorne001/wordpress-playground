@@ -1,7 +1,5 @@
 import { MessageListener } from '@php-wasm/universal';
 import {
-	registerServiceWorker,
-	setPhpInstanceUsedByServiceWorker,
 	spawnPHPWorkerThread,
 	exposeAPI,
 	consumeAPI,
@@ -32,6 +30,9 @@ export const workerUrl: string = new URL(moduleWorkerUrl, origin) + '';
 import serviceWorkerPath from '../../service-worker.ts?worker&url';
 import { FilesystemOperation } from '@php-wasm/fs-journal';
 import { setupFetchNetworkTransport } from './setup-fetch-network-transport';
+import { logger } from '@php-wasm/logger';
+import { PhpWasmError } from '@php-wasm/util';
+import { responseTo } from '@php-wasm/web-service-worker';
 export const serviceWorkerUrl = new URL(serviceWorkerPath, origin);
 
 // Prevent Vite from hot-reloading this file – it would
@@ -56,14 +57,44 @@ export async function bootPlaygroundRemote() {
 		bar = new ProgressBar();
 		document.body.prepend(bar.element);
 	}
+	const sw = navigator.serviceWorker;
+	if (!sw) {
+		/**
+		 * Service workers may only run in secure contexts.
+		 * See https://w3c.github.io/webappsec-secure-contexts/
+		 */
+		if (window.isSecureContext) {
+			throw new PhpWasmError(
+				'Service workers are not supported in your browser.'
+			);
+		} else {
+			throw new PhpWasmError(
+				'WordPress Playground uses service workers and may only work on HTTPS and http://localhost/ sites, but the current site is neither.'
+			);
+		}
+	}
 
-	const scope = Math.random().toFixed(16);
-	await registerServiceWorker(scope, serviceWorkerUrl + '');
+	const registration = await sw.register(serviceWorkerUrl + '', {
+		type: 'module',
+		// Always bypass HTTP cache when fetching the new Service Worker script:
+		updateViaCache: 'none',
+	});
+
+	// Check if there's a new service worker available and, if so, enqueue
+	// the update:
+	try {
+		await registration.update();
+	} catch (e) {
+		// registration.update() throws if it can't reach the server.
+		// We're swallowing the error to keep the app working in offline mode
+		// or when playground.wordpress.net is down. We can be sure we have a
+		// functional service worker at this point because sw.register() succeeded.
+		logger.error('Failed to update service worker.', e);
+	}
 
 	const phpWorkerApi = consumeAPI<PlaygroundWorkerEndpoint>(
 		await spawnPHPWorkerThread(workerUrl)
 	);
-	setPhpInstanceUsedByServiceWorker(phpWorkerApi);
 
 	const wpFrame = document.querySelector('#wp') as HTMLIFrameElement;
 	const phpRemoteApi: WebClientMixin = {
@@ -98,8 +129,35 @@ export async function bootPlaygroundRemote() {
 			// Manage the address bar
 			wpFrame.addEventListener('load', async (e: any) => {
 				try {
+					/**
+					 * When navigating to a page with %0A sequences (encoded newlines)
+					 * in the query string, the `location.href` property of the
+					 * iframe's content window doesn't seem to reflect them. Everything
+					 * else is in place, but not the %0A sequences.
+					 *
+					 * Weirdly, these sequences are available after the next event
+					 * loop tick – hence the `setTimeout(0)`.
+					 *
+					 * The exact cause is unclear at the moment of writing of this
+					 * comment. The WHATWG HTML Standard [1] has a few hints:
+					 *
+					 * * Current and active session history entries may get out of
+					 *   sync for iframes.
+					 * * Documents inside iframes have "is delaying load events" set
+					 *   to true.
+					 *
+					 * But there doesn't seem to be any concrete explanation and no
+					 * recommended remediation. If anyone has a clue, please share it
+					 * in a GitHub issue or start a new PR.
+					 *
+					 * [1] https://html.spec.whatwg.org/multipage/document-sequences.html#nav-active-history-entry
+					 */
+					// Get the content window while e.currentTarget is available.
+					// It will be undefined on the next event loop tick.
+					const contentWindow = e.currentTarget!.contentWindow;
+					await new Promise((resolve) => setTimeout(resolve, 0));
 					const path = await playground.internalUrlToPath(
-						e.currentTarget!.contentWindow.location.href
+						contentWindow.location.href
 					);
 					fn(path);
 				} catch (e) {
@@ -114,6 +172,19 @@ export async function bootPlaygroundRemote() {
 		async goTo(requestedPath: string) {
 			if (!requestedPath.startsWith('/')) {
 				requestedPath = '/' + requestedPath;
+			}
+			/**
+			 * Workaround for a Safari bug: navigating to `/wp-admin`
+			 * without the trailing slash causes the browser to hang.
+			 * Chrome and Firefox correctly navigate to `/wp-admin`,
+			 * get a 302 redirect from PHPRequestHandler, and then follow
+			 * it to `/wp-admin/`.
+			 *
+			 * Interestingly, opening pretty permalinks without the trailing slash
+			 * works correctly. For example, `/sample-page` works as expected.
+			 */
+			if (requestedPath === '/wp-admin') {
+				requestedPath = '/wp-admin/';
 			}
 			const newUrl = await playground.pathToInternalUrl(requestedPath);
 			const oldUrl = wpFrame.src;
@@ -208,10 +279,36 @@ export async function bootPlaygroundRemote() {
 		},
 
 		async boot(options) {
-			await phpWorkerApi.boot({
-				...options,
-				scope,
-			});
+			await phpWorkerApi.boot(options);
+
+			// Proxy the service worker messages to the web worker:
+			navigator.serviceWorker.addEventListener(
+				'message',
+				async function onMessage(event) {
+					/**
+					 * Ignore events meant for other PHP instances to
+					 * avoid handling the same event twice.
+					 *
+					 * This is important because the service worker posts the
+					 * same message to all application instances across all browser tabs.
+					 */
+					if (options.scope && event.data.scope !== options.scope) {
+						return;
+					}
+
+					// Wait for the PHP API client to be set by bootPlaygroundRemote
+					const args = event.data.args || [];
+					const method = event.data
+						.method as keyof PlaygroundWorkerEndpoint;
+					const result = await (phpWorkerApi[method] as Function)(
+						...args
+					);
+					event.source!.postMessage(
+						responseTo(event.data.requestId, result)
+					);
+				}
+			);
+			sw.startMessages();
 
 			try {
 				await phpWorkerApi.isReady();
@@ -222,7 +319,9 @@ export async function bootPlaygroundRemote() {
 				);
 
 				if (options.withNetworking) {
-					await setupFetchNetworkTransport(phpWorkerApi);
+					await setupFetchNetworkTransport(phpWorkerApi, {
+						corsProxyUrl: options.corsProxyUrl,
+					});
 				}
 
 				setAPIReady();

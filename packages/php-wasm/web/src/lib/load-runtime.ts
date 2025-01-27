@@ -5,12 +5,15 @@ import {
 	SupportedPHPVersion,
 } from '@php-wasm/universal';
 import { getPHPLoaderModule } from './get-php-loader-module';
+import {
+	TCPOverFetchOptions,
+	tcpOverFetchWebsocket,
+} from './tcp-over-fetch-websocket';
 
 export interface LoaderOptions {
 	emscriptenOptions?: EmscriptenOptions;
 	onPhpLoaderModuleLoaded?: (module: PHPLoaderModule) => void;
-	/** @deprecated To be replaced with `extensions` in the future */
-	loadAllExtensions?: boolean;
+	tcpOverFetch?: TCPOverFetchOptions;
 }
 
 /**
@@ -43,13 +46,13 @@ export async function loadWebRuntime(
 	phpVersion: SupportedPHPVersion,
 	options: LoaderOptions = {}
 ) {
-	// Determine which variant to load based on the requested extensions
-	const variant = options.loadAllExtensions ? 'kitchen-sink' : 'light';
-
-	const phpLoaderModule = await getPHPLoaderModule(phpVersion, variant);
+	const phpLoaderModule = await getPHPLoaderModule(phpVersion);
 	options.onPhpLoaderModuleLoaded?.(phpLoaderModule);
+	const websocketExtension = options.tcpOverFetch
+		? tcpOverFetchWebsocket(options.tcpOverFetch)
+		: fakeWebsocket();
 	return await loadPHPRuntime(phpLoaderModule, {
 		...(options.emscriptenOptions || {}),
-		...fakeWebsocket(),
+		...websocketExtension,
 	});
 }

@@ -6,45 +6,87 @@ import {
 import { enableMultisite } from './enable-multisite';
 import { bootWordPress } from '@wp-playground/wordpress';
 import { loadNodeRuntime } from '@php-wasm/node';
+import { readFileSync } from 'fs';
+import { join } from 'path';
+import { login } from './login';
+import { PHPRequest, PHPRequestHandler } from '@php-wasm/universal';
 
-const DOCROOT = '/test-dir';
 describe('Blueprint step enableMultisite', () => {
+	let handler: PHPRequestHandler;
 	async function doBootWordPress(options: { absoluteUrl: string }) {
-		const requestHandler = await bootWordPress({
+		handler = await bootWordPress({
 			createPhpRuntime: async () =>
 				await loadNodeRuntime(RecommendedPHPVersion),
 			siteUrl: options.absoluteUrl,
-			documentRoot: DOCROOT,
+			sapiName: 'cli',
 
 			wordPressZip: await getWordPressModule(),
 			sqliteIntegrationPluginZip: await getSqliteDatabaseModule(),
+			createFiles: {
+				'/tmp/wp-cli.phar': readFileSync(
+					join(__dirname, '../../test/wp-cli.phar')
+				),
+			},
 		});
-		const php = await requestHandler.getPrimaryPhp();
+		const php = await handler.getPrimaryPhp();
 
-		return { php, requestHandler };
+		return { php, handler };
 	}
 
-	it('should enable a multisite on a scoped URL', async () => {
-		const { php, requestHandler } = await doBootWordPress({
+	const requestFollowRedirects = async (request: PHPRequest) => {
+		let response = await handler.request(request);
+		while (response.httpStatusCode === 302) {
+			response = await handler.request({
+				url: response.headers['location'][0],
+			});
+		}
+		return response;
+	};
+
+	[
+		{
 			absoluteUrl: 'http://playground-domain/scope:987987/',
-		});
-		await enableMultisite(php, {});
-
-		const response = await requestHandler.request({
-			url: '/wp-admin/network/',
-		});
-		expect(response.text).toContain('My Sites');
-	}, 30_000);
-
-	it('should enable a multisite on a scopeless URL', async () => {
-		const { php, requestHandler } = await doBootWordPress({
+			scoped: true,
+		},
+		{
 			absoluteUrl: 'http://playground-domain/',
-		});
-		await enableMultisite(php, {});
+			scoped: false,
+		},
+	].forEach(({ absoluteUrl, scoped }) => {
+		it(`should set the WP_ALLOW_MULTISITE and SUBDOMAIN_INSTALL constants on a ${
+			scoped ? 'scoped' : 'scopeless'
+		} URL`, async () => {
+			const { php } = await doBootWordPress({
+				absoluteUrl,
+			});
+			await enableMultisite(php, {});
 
-		const response = await requestHandler.request({
-			url: '/wp-admin/network/',
+			/**
+			 * Check if the multisite constants are set.
+			 */
+			const result = await php.run({
+				code: `
+				<?php
+				echo json_encode([
+					'WP_ALLOW_MULTISITE' => defined('WP_ALLOW_MULTISITE'),
+					'SUBDOMAIN_INSTALL' => defined('SUBDOMAIN_INSTALL'),
+				]);
+			`,
+			});
+			expect(result.json['WP_ALLOW_MULTISITE']).toEqual(true);
+			expect(result.json['SUBDOMAIN_INSTALL']).toEqual(false);
+
+			/**
+			 * Login and confirm that the site is a multisite by confirming
+			 * the admin bar includes the multisite menu.
+			 */
+			await login(php, {});
+			const response = await requestFollowRedirects({
+				url: '/',
+			});
+			expect(response.httpStatusCode).toEqual(200);
+			expect(response.text).toContain('My Sites');
+			expect(response.text).toContain('Network Admin');
 		});
-		expect(response.text).toContain('My Sites');
-	}, 30_000);
+	});
 });

@@ -1,60 +1,83 @@
-import { SiteManagerSidebar } from './site-manager-sidebar';
-import { __experimentalUseNavigator as useNavigator } from '@wordpress/components';
-import store, { selectSite } from '../../lib/redux-store';
+import { Sidebar } from './sidebar';
+import { useMediaQuery } from '@wordpress/compose';
+import {
+	useAppDispatch,
+	useActiveSite,
+	useAppSelector,
+} from '../../lib/state/redux/store';
 
 import css from './style.module.css';
+import { SiteInfoPanel } from './site-info-panel';
+import classNames from 'classnames';
 
-export function SiteManager({
-	siteSlug,
-	onSiteChange,
-	siteViewRef,
-}: {
-	siteSlug?: string;
-	onSiteChange: (siteSlug?: string) => void;
-	siteViewRef: React.RefObject<HTMLDivElement>;
-}) {
-	const { goTo } = useNavigator();
+import { forwardRef } from 'react';
+import { setSiteManagerOpen } from '../../lib/state/redux/slice-ui';
+import { BlueprintsPanel } from './blueprints-panel';
 
-	const shouldHideSiteManagerOnSiteChange = () => {
-		/**
-		 * TODO: Currently we check if the site view is hidden.
-		 * Once we add the site editor to the site manager,
-		 * we should check if the site editor is hidden instead.
-		 */
+export const SiteManager = forwardRef<
+	HTMLDivElement,
+	{
+		className?: string;
+	}
+>(({ className }, ref) => {
+	const activeSite = useActiveSite();
+	const dispatch = useAppDispatch();
+
+	const fullScreenSiteManager = useMediaQuery('(max-width: 1126px)');
+	const fullScreenSections = useMediaQuery('(max-width: 875px)');
+	const activeSiteManagerSection = useAppSelector(
+		(state) => state.ui.siteManagerSection
+	);
+
+	const sidebar = (
+		<Sidebar
+			className={css.sidebar}
+			afterSiteClick={() => {
+				if (fullScreenSiteManager) {
+					// Close the site manager so the site view is visible.
+					dispatch(setSiteManagerOpen(false));
+				}
+			}}
+		/>
+	);
+
+	let activePanel;
+	switch (activeSiteManagerSection) {
+		case 'blueprints':
+			activePanel = (
+				<BlueprintsPanel
+					className={css.blueprintsPanel}
+					mobileUi={fullScreenSections}
+				/>
+			);
+			break;
+		case 'site-details':
+			activePanel = activeSite ? (
+				<SiteInfoPanel
+					key={activeSite?.slug}
+					className={css.siteManagerSiteInfo}
+					site={activeSite}
+					mobileUi={fullScreenSections}
+				/>
+			) : null;
+			break;
+		default:
+			activePanel = null;
+			break;
+	}
+	if (fullScreenSections) {
 		return (
-			siteViewRef.current &&
-			window.getComputedStyle(siteViewRef.current).display === 'none'
+			<div className={classNames(css.siteManager, className)} ref={ref}>
+				{activeSiteManagerSection === 'sidebar' || !activePanel
+					? sidebar
+					: activePanel}
+			</div>
 		);
-	};
-
-	const onSiteClick = async (siteSlug: string) => {
-		onSiteChange(siteSlug);
-		const url = new URL(window.location.href);
-		if (siteSlug) {
-			url.searchParams.set('site-slug', siteSlug);
-		} else {
-			url.searchParams.delete('site-slug');
-		}
-		window.history.pushState({}, '', url.toString());
-
-		await store.dispatch(selectSite(siteSlug));
-
-		/**
-		 * On mobile, the site editor and site preview are hidden.
-		 * This doesn't give users any way to go back to the site view.
-		 * So we hide the site manager on site change.
-		 */
-		if (shouldHideSiteManagerOnSiteChange()) {
-			goTo('/');
-		}
-	};
+	}
 	return (
-		<div className={css.siteManager}>
-			<SiteManagerSidebar
-				className={css.siteManagerSidebar}
-				onSiteClick={onSiteClick}
-				siteSlug={siteSlug}
-			/>
+		<div className={classNames(css.siteManager, className)} ref={ref}>
+			{sidebar}
+			{activePanel}
 		</div>
 	);
-}
+});

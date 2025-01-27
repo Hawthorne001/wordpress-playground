@@ -14,14 +14,15 @@ on:
 
 jobs:
     release:
-        # Only run this workflow from the trunk branch and when it's triggered by dmsnell OR adamziel
+        # Only run this workflow from the trunk branch and when it's triggered by a Playground maintainer
         if: >
             github.ref == 'refs/heads/trunk' && (
                 github.event.workflow_run.conclusion == 'success' ||
                 github.actor == 'adamziel' ||
                 github.actor == 'dmsnell' ||
                 github.actor == 'bgrgicak' ||
-                github.actor == 'brandonpayton'
+                github.actor == 'brandonpayton' ||
+                github.actor == 'zaerl'
             )
 
         # Specify runner + deployment step
@@ -31,14 +32,15 @@ jobs:
         env:
             GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         steps:
-            - uses: actions/checkout@v3
+            - uses: actions/checkout@v4
               with:
+                  submodules: true
                   ref: trunk
                   clean: true
                   persist-credentials: false
             - name: Fetch trunk
               shell: bash
-              run: git fetch origin trunk --depth=1
+              run: git fetch origin trunk --depth=1 --recurse-submodules
             - name: 'Install bun (for the changelog)'
               run: |
                   curl -fsSL https://bun.sh/install | bash

@@ -1,6 +1,7 @@
 ---
 sidebar_position: 8
 title: Examples
+slug: /blueprints/examples
 ---
 
 import BlueprintExample from '@site/src/components/Blueprints/BlueprintExample.mdx';
@@ -19,14 +20,14 @@ Let's see some cool things you can do with Blueprints.
 	"steps": [
 		{
 			"step": "installPlugin",
-			"pluginZipFile": {
+			"pluginData": {
 				"resource": "wordpress.org/plugins",
 				"slug": "coblocks"
 			}
 		},
 		{
 			"step": "installTheme",
-			"themeZipFile": {
+			"themeData": {
 				"resource": "wordpress.org/themes",
 				"slug": "pendant"
 			}
@@ -90,14 +91,14 @@ blueprint={{
 	"steps": [
 		{
 			"step": "installPlugin",
-			"pluginZipFile": {
+			"pluginData": {
 				"resource": "url",
 				"url": "https://your-site.com/your-plugin.zip"
 			}
 		},
 		{
 			"step": "installTheme",
-			"themeZipFile": {
+			"themeData": {
 				"resource": "url",
 				"url": "https://your-site.com/your-theme.zip"
 			}
@@ -119,13 +120,10 @@ blueprint={{
 	]
 }} />
 
-## Enable PHP extensions and networking
+## Enable networking
 
 <BlueprintExample blueprint={{
 	"landingPage": "/wp-admin/plugin-install.php",
-	"phpExtensionBundles": [
-		"kitchen-sink"
-	],
 	"features": {
 		"networking": true
 	},
@@ -142,9 +140,6 @@ Use the `writeFile` step to add code to a mu-plugin that runs on every request.
 
 <BlueprintExample blueprint={{
 	"landingPage": "/category/uncategorized/",
-	"phpExtensionBundles": [
-		"kitchen-sink"
-	],
 	"features": {
 		"networking": true
 	},
@@ -172,7 +167,7 @@ Use the `writeFile` step to add code to a mu-plugin that runs on every request.
     },
     {
       "step": "installPlugin",
-      "pluginZipFile": {
+      "pluginData": {
         "resource": "wordpress.org/plugins",
         "slug": "interactive-code-block"
       }
@@ -226,4 +221,23 @@ Playground only ships with a few recent WordPress releases. If you need to use a
             "password": "password"
         }
     ]
+}} />
+
+## Run WordPress from trunk or a specific commit.
+
+WordPress Playground can run `trunk` (the latest commit), the HEAD of a specific branch or a specific commit from the [WordPress/WordPress](https://github.com/WordPress/WordPress) GitHub repository.
+
+You can specify the reference in `"url": "https://playground.wordpress.net/plugin-proxy.php?build-ref=trunk"`.
+
+To specify the latest commit of a particular branch, you can change the reference to the branch version number, eg `6.6`. To run a specific commit, you can use the commit hash from [WordPress/WordPress](https://github.com/WordPress/WordPress), eg `7d7a52367dee9925337e7d901886c2e9b21f70b6`.
+
+**Note:** the oldest supported WordPress version is `5.9.9`, following the SQLite integration plugin.
+
+<BlueprintExample blueprint={{
+    "landingPage": "/wp-admin",
+	"login" : true,
+	"preferredVersions" : {
+		"php": "8.0",
+		"wp": "https://playground.wordpress.net/plugin-proxy.php?build-ref=trunk"
+	}
 }} />

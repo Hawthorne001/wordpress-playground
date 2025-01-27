@@ -50,7 +50,7 @@ class ProxyFunctionsTests extends TestCase
                 'https://w.org/hosting',
                 '/hosting/',
                 'https://cors.playground.wordpress.net/proxy.php',
-                'https://cors.playground.wordpress.net/proxy.php/https://w.org/hosting/'
+                'https://cors.playground.wordpress.net/proxy.php?https://w.org/hosting/'
             ],
             'Relative redirect when the proxy URL has a trailing slash itself' => [
                 'https://w.org/hosting',
@@ -62,13 +62,13 @@ class ProxyFunctionsTests extends TestCase
                 'https://w.org/hosting',
                 '/hosting/?utm_source=wporg',
                 'https://cors.playground.wordpress.net/proxy.php',
-                'https://cors.playground.wordpress.net/proxy.php/https://w.org/hosting/?utm_source=wporg'
+                'https://cors.playground.wordpress.net/proxy.php?https://w.org/hosting/?utm_source=wporg'
             ],
             'Absolute redirect with query params involved' => [
                 'https://w.org/hosting',
                 'https://w.net/hosting/?utm_source=wporg',
                 'https://cors.playground.wordpress.net/proxy.php',
-                'https://cors.playground.wordpress.net/proxy.php/https://w.net/hosting/?utm_source=wporg'
+                'https://cors.playground.wordpress.net/proxy.php?https://w.net/hosting/?utm_source=wporg'
             ],
         ];
     }
@@ -84,20 +84,48 @@ class ProxyFunctionsTests extends TestCase
 
     static public function providerGetTargetUrl() {
         return [
-            'Simple request' => [
+            'Request with server-provided PATH_INFO' => [
                 [
-                    'REQUEST_URI' => '/cors-proxy/proxy.php/http://example.com',
-                    'SCRIPT_NAME' => '/cors-proxy/proxy.php',
+                    'PATH_INFO' => '/http://example.com',
                 ],
                 'http://example.com'
             ],
-            'Request with query params' => [
+            'Request with server-provided single-slash PATH_INFO' => [
                 [
-                    'REQUEST_URI' => '/cors-proxy/proxy.php/http://example.com?test=1',
-                    'SCRIPT_NAME' => '/cors-proxy/proxy.php',
+                    'PATH_INFO' => '/',
                 ],
-                'http://example.com?test=1'
-            ]
+                false,
+            ],
+            'Request with server-provided empty PATH_INFO' => [
+                [
+                    'PATH_INFO' => '',
+                ],
+                false,
+            ],
+            'Request with server-provided PATH_INFO and QUERY_STRING' => [
+                [
+                    'PATH_INFO' => '/http://example.com/from-path-info',
+                    'QUERY_STRING' => 'http://example.com/from-query-string',
+                ],
+                'http://example.com/from-path-info'
+            ],
+            'Request with server-provided slash PATH_INFO and QUERY_STRING' => [
+                [
+                    'PATH_INFO' => '/',
+                    'QUERY_STRING' => 'http://example.com/from-query-string',
+                ],
+                'http://example.com/from-query-string'
+            ],
+            'Request with just query params' => [
+                [
+                    'QUERY_STRING' => 'http://example.com/from-query-string',
+                ],
+                'http://example.com/from-query-string'
+            ],
+            'Request with neither PATH_INFO nor QUERY_STRING' => [
+                [],
+                false
+            ],
         ];
     }
     public function testGetCurrentScriptUri()
@@ -110,5 +138,81 @@ class ProxyFunctionsTests extends TestCase
         $this->expectException(CorsProxyException::class);
         url_validate_and_resolve('ftp://example.com');
     }
-    
+
+    public function testUrlValidateAndResolveWithTargetSelf()
+    {
+        $this->expectException(CorsProxyException::class);
+        $_SERVER['HTTP_HOST'] = 'cors.playground.wordpress.net';
+        url_validate_and_resolve(
+            'http://cors.playground.wordpress.net/cors-proxy.php?http://cors.playground.wordpress.net'
+        );
+    }
+
+    public function testFilterHeadersStrings()
+    {
+        $original_headers = [
+            'Accept' => 'application/json',
+            'Content-Type' => 'application/json',
+            'Cookie' => 'test=1',
+            'Host' => 'example.com',
+        ];
+
+        $strictly_disallowed_headers = [
+            'Cookie',
+            'Host',
+        ];
+
+        $headers_requiring_opt_in = [
+            'Authorization',
+        ];
+
+        $this->assertEquals(
+            [
+                'Accept' => 'application/json',
+                'Content-Type' => 'application/json',
+            ],
+            filter_headers_by_name(
+                $original_headers,
+                $strictly_disallowed_headers,
+                $headers_requiring_opt_in,
+            )
+        );
+    }
+
+    public function testFilterHeaderStringsWithAdditionalAllowedHeaders()
+    {
+        $original_headers = [
+            'Accept' => 'application/json',
+            'Content-Type' => 'application/json',
+            'Cookie' => 'test=1',
+            'Host' => 'example.com',
+            'Authorization' => 'Bearer 1234567890',
+            'X-Authorization' => 'Bearer 1234567890',
+            'X-Cors-Proxy-Allowed-Request-Headers' => 'Authorization',
+        ];
+
+        $strictly_disallowed_headers = [
+            'Cookie',
+            'Host',
+        ];
+
+        $headers_requiring_opt_in = [
+            'Authorization',
+        ];
+
+        $this->assertEquals(
+            [
+                'Accept' => 'application/json',
+                'Content-Type' => 'application/json',
+                'Authorization' => 'Bearer 1234567890',
+                'X-Authorization' => 'Bearer 1234567890',
+                'X-Cors-Proxy-Allowed-Request-Headers' => 'Authorization',
+            ],
+            filter_headers_by_name(
+                $original_headers,
+                $strictly_disallowed_headers,
+                $headers_requiring_opt_in,
+            )
+        );
+    }
 }

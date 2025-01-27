@@ -14,6 +14,7 @@ export default defineConfig({
 		dts({
 			entryRoot: 'src',
 			tsconfigPath: path.join(__dirname, 'tsconfig.lib.json'),
+			pathsToAliases: false,
 		}),
 		viteTsConfigPaths({
 			root: '../../../',
@@ -37,6 +38,7 @@ export default defineConfig({
 			// Don't forget to update your package.json as well.
 			formats: ['es', 'cjs'],
 		},
+		sourcemap: true,
 		rollupOptions: {
 			// External packages that should not be bundled into your library.
 			external: getExternalModules(),

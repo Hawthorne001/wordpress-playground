@@ -12,6 +12,8 @@
 import { UniversalPHP } from '@php-wasm/universal';
 import { phpVars } from '@php-wasm/util';
 
+export { createMemoizedFetch } from './create-memoized-fetch';
+
 export const RecommendedPHPVersion = '8.0';
 
 /**
@@ -60,7 +62,7 @@ export const unzipFile = async (
 				$zip->close();
 				chmod($extractTo, 0777);
             } else {
-                throw new Exception("Could not unzip file");
+                throw new Exception("Could not unzip file: " . $zip->getStatusString());
             }
         }
         unzip(${js.zipPath}, ${js.extractToPath}, ${js.overwriteFiles});

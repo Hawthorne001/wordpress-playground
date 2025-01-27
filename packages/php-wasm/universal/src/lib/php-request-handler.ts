@@ -318,9 +318,7 @@ export class PHPRequestHandler {
 	 * @param  request - PHP Request data.
 	 */
 	async request(request: PHPRequest): Promise<PHPResponse> {
-		const isAbsolute =
-			request.url.startsWith('http://') ||
-			request.url.startsWith('https://');
+		const isAbsolute = URL.canParse(request.url);
 		const requestedUrl = new URL(
 			// Remove the hash part of the URL as it's not meant for the server.
 			request.url.split('#')[0],
@@ -548,6 +546,7 @@ export class PHPRequestHandler {
  */
 function inferMimeType(path: string): string {
 	const extension = path.split('.').pop() as keyof typeof mimeTypes;
+	// @TODO: Consider not sending a default mime type to let the browser guess
 	return mimeTypes[extension] || mimeTypes['_default'];
 }
 

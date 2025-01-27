@@ -1,5 +1,7 @@
 FROM playground-php-wasm:base
 
+ARG WITH_JSPI="no"
+
 # The PHP version to build.
 # This value must point to an existing branch of the
 # https://github.com/php/php-src.git repository when prefixed
@@ -22,20 +24,42 @@ RUN cd php-src && ./buildconf --force
 # Bring in the libraries
 RUN mkdir -p /root/lib/include /root/lib/lib /libs
 COPY ./bison2.7/dist/ /libs/bison2.7
-COPY ./libedit/dist/root/lib /root/lib
-COPY ./libiconv/dist/root/lib /root/lib
-COPY ./libcurl/dist/root/lib /root/lib
-COPY ./libncurses/dist/root/lib /root/lib
-COPY ./libopenssl/dist/root/lib /root/lib
-COPY ./libpng16/dist/root/lib /root/lib
-COPY ./libjpeg/dist/root/lib /root/lib
-COPY ./libwebp/dist/root/lib /root/lib
-COPY ./libsqlite3/dist/root/lib /root/lib
-COPY ./libxml2/dist/root/lib /root/lib
-COPY ./libz/dist/root/lib /root/lib
-COPY ./libzip/dist/1.2.0/root/lib /libs/libzip/1.2.0
-COPY ./libzip/dist/1.9.2/root/lib /libs/libzip/1.9.2
-COPY ./oniguruma/dist/root/lib /root/lib
+COPY ./libiconv/ /root/builds/libiconv
+COPY ./libcurl/ /root/builds/libcurl
+COPY ./libopenssl/ /root/builds/libopenssl
+COPY ./libpng16/ /root/builds/libpng16
+COPY ./libjpeg/ /root/builds/libjpeg
+COPY ./libwebp/ /root/builds/libwebp
+COPY ./libsqlite3/ /root/builds/libsqlite3
+COPY ./libxml2/ /root/builds/libxml2
+COPY ./libz/ /root/builds/libz
+COPY ./oniguruma/ /root/builds/oniguruma
+
+RUN if [ "$WITH_JSPI" = "yes" ]; then \
+	cp -r /root/builds/*/jspi/dist/root/lib/* /root/lib; \
+else \
+	cp -r /root/builds/*/asyncify/dist/root/lib/* /root/lib; \
+fi
+
+COPY ./libzip/ /root/builds-libzip/
+RUN mkdir -p /libs/libzip
+RUN if [ "$WITH_JSPI" = "yes" ]; then \
+	cp -r /root/builds-libzip/jspi/dist/1.2.0/root/lib /libs/libzip/1.2.0; \
+	cp -r /root/builds-libzip/jspi/dist/1.9.2/root/lib /libs/libzip/1.9.2; \
+else \
+	cp -r /root/builds-libzip/asyncify/dist/1.2.0/root/lib /libs/libzip/1.2.0; \
+	cp -r /root/builds-libzip/asyncify/dist/1.9.2/root/lib /libs/libzip/1.9.2; \
+fi
+
+COPY ./libopenssl/ /root/builds-libopenssl/
+RUN mkdir -p /libs/libopenssl
+RUN if [ "$WITH_JSPI" = "yes" ]; then \
+	cp -r /root/builds-libopenssl/jspi/dist/1.1.0h/root/lib /libs/libopenssl/1.1.0h; \
+	cp -r /root/builds-libopenssl/jspi/dist/1.1.1/root/lib /libs/libopenssl/1.1.1; \
+else \
+	cp -r /root/builds-libopenssl/asyncify/dist/1.1.0h/root/lib /libs/libopenssl/1.1.0h; \
+	cp -r /root/builds-libopenssl/asyncify/dist/1.1.1/root/lib /libs/libopenssl/1.1.1; \
+fi
 
 # Build PHP
 
@@ -121,13 +145,11 @@ RUN if [ "$WITH_LIBZIP" = "yes" ]; then \
 RUN if [ "$WITH_CLI_SAPI" = "yes" ]; \
 	then \
 		# Configure build flags
-		echo -n ' --enable-phar --enable-cli=static --enable-readline --with-libedit=/root/lib ' >> /root/.php-configure-flags && \
+		echo -n ' --enable-phar --enable-cli=static ' >> /root/.php-configure-flags && \
 		echo -n ' sapi/cli/php_cli_process_title.c sapi/cli/ps_title.c sapi/cli/php_http_parser.c sapi/cli/php_cli_server.c sapi/cli/php_cli.c ' \
 			>> /root/.emcc-php-wasm-sources && \
 		echo -n ', "_run_cli", "_wasm_add_cli_arg"' >> /root/.EXPORTED_FUNCTIONS && \
-		echo -n ' -DWITH_CLI_SAPI=1 -lncurses -ledit ' >> /root/.emcc-php-wasm-flags && \
-		# Disable dlopen() in the readline PHP extension
-		echo '#undef COMPILE_DL_READLINE' >> /root/php-src/main/php_config.h && \
+		echo -n ' -DWITH_CLI_SAPI=1 ' >> /root/.emcc-php-wasm-flags && \
 		/root/replace.sh 's/GET_SHELL_CB\(cb\);/(cb) = php_cli_get_shell_callbacks();/g' /root/php-src/ext/readline/readline_cli.c; \
 	else \
 		echo -n ' --disable-cli ' >> /root/.php-configure-flags; \
@@ -176,6 +198,11 @@ RUN if [ "$WITH_GD" = "yes" ]; \
 # Add openssl if needed
 RUN if [ "$WITH_OPENSSL" = "yes" ]; \
 	then \
+		if [[ "${PHP_VERSION:0:1}" -lt "8" || ("${PHP_VERSION:0:1}" -eq "8" && "${PHP_VERSION:2:1}" -lt "4") ]]; then \
+			cp -r /libs/libopenssl/1.1.0h/* /root/lib; \
+		else \
+			cp -r /libs/libopenssl/1.1.1/* /root/lib; \
+		fi; \
 		echo -n ' --with-openssl --with-openssl-dir=/root/lib ' >> /root/.php-configure-flags; \
 		echo -n ' -lssl -lcrypto ' >> /root/.emcc-php-wasm-flags; \
 	fi;
@@ -252,7 +279,10 @@ RUN cd /root && \
 	git apply --no-index /root/php${PHP_VERSION:0:3}*.patch -v && \
 	( [[ "${PHP_VERSION:0:3}" == '8.3' ]] && \
 		git apply --no-index /root/php-chunk-alloc-zend-assert-8.3.patch -v || \
-		git apply --no-index /root/php-chunk-alloc-zend-assert.patch -v \
+		( [[ "${PHP_VERSION:0:3}" == '8.4' ]] && \
+			git apply --no-index /root/php-chunk-alloc-zend-assert-8.4.patch -v || \
+			git apply --no-index /root/php-chunk-alloc-zend-assert.patch -v \
+		) \
 	) && \
 	touch php-src/patched
 
@@ -267,7 +297,7 @@ RUN source /root/emsdk/emsdk_env.sh && \
 CURL_CFLAGS="-I/root/lib/include" \
 WEBP_LIBS="-L/root/lib/lib" \
 WEBP_CFLAGS="-I/root/lib/include" \
-CURL_LIBS="-L/root/lib/lib" \
+CURL_LIBS="-I/root/lib/lib -L/root/lib/lib" \
 	emconfigure ./configure \
 	PKG_CONFIG_PATH=$PKG_CONFIG_PATH \
 	# Fibers are a PHP 8.1+ feature. They are compiled as
@@ -351,10 +381,11 @@ RUN echo '' > /root/php-src/ext/standard/proc_open.c;
 
 RUN source /root/emsdk/emsdk_env.sh && \
 	# We're compiling PHP as emscripten's side module...
-	EMCC_FLAGS=" -sSIDE_MODULE -Dsetsockopt=wasm_setsockopt -Dphp_exec=wasm_php_exec " \
+	export JSPI_FLAGS=$(if [ "$WITH_JSPI" = "yes" ]; then echo "-sSUPPORT_LONGJMP=wasm -fwasm-exceptions"; else echo ""; fi) && \
+	EMCC_FLAGS=" -sSIDE_MODULE -Dsetsockopt=wasm_setsockopt -Dphp_exec=wasm_php_exec $JSPI_FLAGS " \
 	# ...which means we must skip all the libraries - they will be provided in the final linking step.
 	EMCC_SKIP="-lz -ledit -ldl -lncurses -lzip -lpng16 -lssl -lcrypto -lxml2 -lc -lm -lsqlite3 /root/lib/lib/libxml2.a /root/lib/lib/libsqlite3.so /root/lib/lib/libsqlite3.a /root/lib/lib/libsqlite3.a /root/lib/lib/libpng16.so /root/lib/lib/libwebp.a /root/lib/lib/libjpeg.a" \
-	emmake make -j8
+	emmake make -j1
 
 RUN cp -v /root/php-src/.libs/libphp*.la /root/lib/libphp.la
 RUN cp -v /root/php-src/.libs/libphp*.a /root/lib/libphp.a
@@ -412,31 +443,29 @@ RUN if [ "$WITH_WS_NETWORKING_PROXY" = "yes" ]; \
 		echo -n ' -lwebsocket.js ' >> /root/.emcc-php-wasm-flags; \
 	fi
 
-# Always enable Asyncify since `post_message_to_js()` supports asynchronous handlers:
-RUN echo -n ' -s ASYNCIFY=1 -s ASYNCIFY_IGNORE_INDIRECT=1 ' >> /root/.emcc-php-wasm-flags; \
-	# Emscripten supports yielding from sync functions to JavaScript event loop, but all
-	# the synchronous functions doing that must be explicitly listed here. This is an
-	# exhaustive list that was created by compiling PHP with ASYNCIFY, running code that
-	# uses networking, observing the error, and listing the missing functions.
-	#
-	# If you a get an error similar to the one below, you need to add all the function on
-	# the stack to the "ASYNCIFY_ONLY" list below (in this case, it's php_mysqlnd_net_open_tcp_or_unix_pub):
-	#
-	# RuntimeError: unreachable
-	# at php_mysqlnd_net_open_tcp_or_unix_pub (<anonymous>:wasm-function[9341]:0x5e42b8)
-	# at byn$fpcast-emu$php_mysqlnd_net_open_tcp_or_unix_pub (<anonymous>:wasm-function[17222]:0x7795e9)
-	# at php_mysqlnd_net_connect_ex_pub (<anonymous>:wasm-function[9338]:0x5e3f02)
-	#
-	# Node cuts the trace short by default so use the --stack-trace-limit=50 CLI flag
-	# to get the entire stack.
-	#
-	# -------
-	#
-	# Related: Any errors like Fatal error: Cannot redeclare function ...
-	# are caused by dispatching a PHP request while an execution is paused
-	# due to an async call – it means the same PHP files are loaded before
-	# the previous request, where they're already loaded, is concluded.
-	export ASYNCIFY_IMPORTS=$'["_dlopen_js",\n\
+# Emscripten supports yielding from sync functions to JavaScript event loop, but all
+# the synchronous functions doing that must be explicitly listed here. This is an
+# exhaustive list that was created by compiling PHP with ASYNCIFY, running code that
+# uses networking, observing the error, and listing the missing functions.
+#
+# If you a get an error similar to the one below, you need to add all the function on
+# the stack to the "ASYNCIFY_ONLY" list below (in this case, it's php_mysqlnd_net_open_tcp_or_unix_pub):
+#
+# RuntimeError: unreachable
+# at php_mysqlnd_net_open_tcp_or_unix_pub (<anonymous>:wasm-function[9341]:0x5e42b8)
+# at byn$fpcast-emu$php_mysqlnd_net_open_tcp_or_unix_pub (<anonymous>:wasm-function[17222]:0x7795e9)
+# at php_mysqlnd_net_connect_ex_pub (<anonymous>:wasm-function[9338]:0x5e3f02)
+#
+# Node cuts the trace short by default so use the --stack-trace-limit=50 CLI flag
+# to get the entire stack.
+#
+# -------
+#
+# Related: Any errors like Fatal error: Cannot redeclare function ...
+# are caused by dispatching a PHP request while an execution is paused
+# due to an async call – it means the same PHP files are loaded before
+# the previous request, where they're already loaded, is concluded.
+RUN export ASYNCIFY_IMPORTS=$'["_dlopen_js",\n\
 "invoke_i",\n\
 "invoke_ii",\n\
 "invoke_iii",\n\
@@ -457,13 +486,26 @@ RUN echo -n ' -s ASYNCIFY=1 -s ASYNCIFY_IGNORE_INDIRECT=1 ' >> /root/.emcc-php-w
 "invoke_viiiiiii",\n\
 "invoke_viiiiiiiii",\n\
 "js_open_process",\n\
+"_js_open_process",\n\
+"_asyncjs__js_open_process",\n\
 "js_popen_to_file",\n\
+"_js_popen_to_file",\n\
+"_asyncjs__js_popen_to_file",\n\
 "js_fd_read",\n\
+"_js_fd_read",\n\
 "js_module_onMessage",\n\
+"_js_module_onMessage",\n\
+"_asyncjs__js_module_onMessage",\n\
 "js_waitpid",\n\
+"_js_waitpid",\n\
+"_asyncjs__js_waitpid",\n\
 "wasm_poll_socket",\n\
-"wasm_shutdown"]'; \
-	echo -n " -s ASYNCIFY_IMPORTS=$ASYNCIFY_IMPORTS " | tr -d "\n" >> /root/.emcc-php-wasm-flags; \
+"_wasm_poll_socket",\n\
+"_asyncjs__wasm_poll_socket",\n\
+"wasm_shutdown",\n\
+"_wasm_shutdown",\n\
+"_asyncjs__wasm_shutdown"]'; \
+	echo -n " -s ASYNCIFY_IMPORTS=$ASYNCIFY_IMPORTS " | tr -d "\n" >> /root/.emcc-php-asyncify-flags; \
 	export ASYNCIFY_ONLY_UNPREFIXED=$'"dynCall_dd",\
 "dynCall_i",\
 "dynCall_ii",\
@@ -495,15 +537,23 @@ RUN echo -n ' -s ASYNCIFY=1 -s ASYNCIFY_IGNORE_INDIRECT=1 ' >> /root/.emcc-php-w
 "dynCall_viiiii",\
 "dynCall_viiiiiii",\
 "dynCall_viiiiiiii",'; \
-	export ASYNCIFY_ONLY=$'"rc_dtor_func",\
+
+export ASYNCIFY_ONLY=$'"zif_phar_fopen",\
+"zif_phar_file_get_contents",\
+"zend_execute_script",\
+"php_execute_script_ex",\
+"rc_dtor_func",\
 "zif_curl_exec",\
 "curl_easy_perform",\
 "Curl_wait_ms",\
 "Curl_http_connect",\
+"Curl_proxy_connect",\
 "RAND_status",\
 "rand_status",\
+"call_extract_if_dead",\
 "__wrap_select",\
 "Curl_socket_check",\
+"Curl_conncache_foreach",\
 "Curl_is_connected",\
 "multi_runsingle",\
 "curl_multi_perform",\
@@ -538,9 +588,11 @@ RUN echo -n ' -s ASYNCIFY=1 -s ASYNCIFY_IGNORE_INDIRECT=1 ' >> /root/.emcc-php-w
 "read",\
 "zif_sleep",\
 "zif_stream_get_contents",\
+"zif_stream_select",\
 "_php_stream_fill_read_buffer",\
 "_php_stream_read",\
 "php_stream_read_to_str",\
+"php_userstreamop_read",\
 "zif_fread",\
 "wasm_read",\
 "php_stdiop_read",\
@@ -629,6 +681,7 @@ RUN echo -n ' -s ASYNCIFY=1 -s ASYNCIFY_IGNORE_INDIRECT=1 ' >> /root/.emcc-php-w
 "_call_user_function_impl",\
 "_mysqlnd_run_command",\
 "_php_stream_copy_to_mem",\
+"_php_stream_copy_to_stream_ex",\
 "_php_stream_eof",\
 "_php_stream_fill_read_buffer",\
 "_php_stream_free",\
@@ -638,9 +691,11 @@ RUN echo -n ' -s ASYNCIFY=1 -s ASYNCIFY_IGNORE_INDIRECT=1 ' >> /root/.emcc-php-w
 "_php_stream_set_option",\
 "_php_stream_write",\
 "_php_stream_xport_create",\
+"zif_stream_socket_enable_crypto",\
 "do_cli",\
 "do_cli_server",\
 "execute_ex",\
+"EVP_PKEY_encrypt",\
 "list_entry_destructor",\
 "main",\
 "mysql_handle_begin",\
@@ -653,6 +708,7 @@ RUN echo -n ' -s ASYNCIFY=1 -s ASYNCIFY_IGNORE_INDIRECT=1 ' >> /root/.emcc-php-w
 "mysql_stmt_execute",\
 "mysqli_commit_or_rollback_libmysql",\
 "mysqli_common_connect",\
+"mysqlnd_caching_sha2_handle_server_response",\
 "mysqlnd_com_handshake_run",\
 "mysqlnd_com_init_db_run",\
 "mysqlnd_com_stmt_execute_run",\
@@ -711,9 +767,11 @@ RUN echo -n ' -s ASYNCIFY=1 -s ASYNCIFY_IGNORE_INDIRECT=1 ' >> /root/.emcc-php-w
 "php_cli_server_recv_event_read_request",\
 "php_exec",\
 "php_execute_script",\
+"php_execute_script_ex",\
 "php_fsockopen_stream",\
 "php_getimagesize_from_any",\
 "php_mysqlnd_auth_response_read",\
+"php_mysqlnd_cached_sha2_result_read",\
 "php_mysqlnd_cmd_write",\
 "php_mysqlnd_conn_connect_pub",\
 "php_mysqlnd_conn_data_connect_handshake_pub",\
@@ -744,6 +802,7 @@ RUN echo -n ' -s ASYNCIFY=1 -s ASYNCIFY_IGNORE_INDIRECT=1 ' >> /root/.emcc-php-w
 "php_mysqlnd_rowp_read",\
 "php_mysqlnd_rset_field_read",\
 "php_mysqlnd_rset_header_read",\
+"php_mysqlnd_sha256_pk_request_response_read",\
 "php_mysqlnd_stmt_execute_pub",\
 "php_mysqlnd_stmt_prepare_pub",\
 "php_network_accept_incoming",\
@@ -769,16 +828,21 @@ RUN echo -n ' -s ASYNCIFY=1 -s ASYNCIFY_IGNORE_INDIRECT=1 ' >> /root/.emcc-php-w
 "php_stream_xport_crypto_enable",\
 "php_stream_xport_crypto_setup",\
 "php_tcp_sockop_set_option",\
+"pkey_rsa_encrypt",\
 "preg_replace_func_impl",\
 "readline_shell_run",\
 "reflection_method_invoke",\
 "run_cli",\
+"RSA_padding_add_PKCS1_OAEP_mgf1",\
 "user_shutdown_function_call",\
 "shutdown_executor",\
 "shutdown_destructors",\
 "stream_resource_regular_dtor",\
+"stream_array_from_fd_set",\
 "zend_call_function",\
+"zend_call_method_if_exists",\
 "zend_call_known_function",\
+"php_userstreamop_set_option",\
 "zend_close_rsrc_list",\
 "zend_deactivate",\
 "zend_destroy_rsrc_list",\
@@ -789,6 +853,7 @@ RUN echo -n ' -s ASYNCIFY=1 -s ASYNCIFY_IGNORE_INDIRECT=1 ' >> /root/.emcc-php-w
 "zend_execute",\
 "zend_execute_scripts",\
 "zend_error",\
+"zend_deprecated_function",\
 "zend_error_va_list",\
 "zend_hash_apply",\
 "zend_hash_graceful_reverse_destroy",\
@@ -805,6 +870,7 @@ RUN echo -n ' -s ASYNCIFY=1 -s ASYNCIFY_IGNORE_INDIRECT=1 ' >> /root/.emcc-php-w
 "zif_call_user_func",\
 "zif_json_encode",\
 "zif_call_user_func_array",\
+"zend_user_it_get_current_data",\
 "zif_fclose",\
 "zif_feof",\
 "zif_file_get_contents",\
@@ -860,12 +926,30 @@ RUN echo -n ' -s ASYNCIFY=1 -s ASYNCIFY_IGNORE_INDIRECT=1 ' >> /root/.emcc-php-w
 "zim_ReflectionClass_newInstanceArgs",\
 "zim_reflection_class_newInstanceArgs",\
 "zim_reflection_method_invoke",\
-"zim_reflection_method_invokeArgs"'; \
+"zim_reflection_method_invokeArgs",\
+"ZEND_INCLUDE_OR_EVAL_SPEC_CV_HANDLER",\
+"ZEND_NEW_SPEC_CONST_UNUSED_HANDLER",\
+"compile_file",\
+"file_handle_dtor",\
+"open_file_for_scanning",\
+"phar_compile_file",\
+"php_zend_stream_closer",\
+"zend_fetch_class_by_name",\
+"zend_file_handle_dtor",\
+"zend_free_extra_named_params",\
+"zend_include_or_eval",\
+"zend_llist_del_element",\
+"zend_lookup_class_ex",\
+"zend_stream_fixup",\
+"zif_spl_autoload_call",\
+"php_error_docref",\
+"php_pcre_replace_func_impl",\
+"php_verror"'; \
 	# If pointer casts are enabled, we need to asyncify both the prefixed and unprefixed names
 	if [ "${PHP_VERSION:0:1}" -lt "8" ]; then \
 		export ASYNCIFY_ONLY="$ASYNCIFY_ONLY,"$(echo "$ASYNCIFY_ONLY" | sed -E $'s/"([a-zA-Z])/"byn$fpcast-emu$\\1/g'); \
 	fi; \
-	echo -n ' -s ASYNCIFY_ONLY=['$ASYNCIFY_ONLY_UNPREFIXED$ASYNCIFY_ONLY'] '| tr -d "\n" >> /root/.emcc-php-wasm-flags;
+	echo -n ' -s ASYNCIFY_ONLY=['$ASYNCIFY_ONLY_UNPREFIXED$ASYNCIFY_ONLY'] '| tr -d "\n" >> /root/.emcc-php-asyncify-flags;
 
 # Build the final .wasm file
 RUN mkdir /root/output
@@ -874,11 +958,19 @@ ARG WITH_SOURCEMAPS
 RUN set -euxo pipefail; \
 	mkdir -p /build/output; \
 	source /root/emsdk/emsdk_env.sh; \
+	if [ "$WITH_JSPI" = "yes" ]; then \
+		export ASYNCIFY_FLAGS=" -s ASYNCIFY=2 -sSUPPORT_LONGJMP=wasm -fwasm-exceptions -sJSPI_IMPORTS=js_open_process,js_waitpid,js_process_status,js_create_input_device,wasm_setsockopt,wasm_shutdown,wasm_close -sJSPI_EXPORTS=wasm_sleep,wasm_read,emscripten_sleep,wasm_sapi_handle_request,wasm_sapi_request_shutdown,wasm_poll_socket,wrap_select,__wrap_select,select,php_pollfd_for,fflush,wasm_popen,wasm_read,wasm_php_exec,run_cli -s EXTRA_EXPORTED_RUNTIME_METHODS=ccall,PROXYFS,wasmExports,_malloc "; \
+		echo '#define PLAYGROUND_JSPI 1' > /root/php_wasm_asyncify.h; \
+	else \
+		export ASYNCIFY_FLAGS=" -s ASYNCIFY=1 -s ASYNCIFY_IGNORE_INDIRECT=1 -s EXPORTED_RUNTIME_METHODS=ccall,PROXYFS,wasmExports $(cat /root/.emcc-php-asyncify-flags)  "; \
+		echo '' > /root/php_wasm_asyncify.h; \
+	fi; \	
 	export EXPORTED_FUNCTIONS=$'["_exit", \n\
 "UTF8ToString", \n\
 "stringToUTF8", \n\
 "lengthBytesUTF8", \n\
 "FS", \n\
+"___wrap_select", \n\
 "_wasm_set_sapi_name", \n\
 "_php_wasm_init", \n\
 "_emscripten_sleep", \n\
@@ -887,6 +979,7 @@ RUN set -euxo pipefail; \
 "_wasm_add_SERVER_entry", \n\
 "_wasm_add_ENV_entry", \n\
 "_wasm_read", \n\
+"_wasm_free", \n\
 "_wasm_sapi_handle_request", \n\
 "_wasm_sapi_request_shutdown", \n\
 "_wasm_set_content_length", \n\
@@ -915,10 +1008,9 @@ RUN set -euxo pipefail; \
 	-I /root/lib/include \
 	-L/root/lib -L/root/lib/lib/ \
 	-lproxyfs.js \
+	$ASYNCIFY_FLAGS \
 	$(cat /root/.emcc-php-wasm-flags) \
-	-o /build/output/php.js \
 	-s EXPORTED_FUNCTIONS="$EXPORTED_FUNCTIONS" \
-	-s EXPORTED_RUNTIME_METHODS='["ccall", "PROXYFS", "wasmExports"]' \
 	-s INITIAL_MEMORY=1024MB \
 	-s ALLOW_MEMORY_GROWTH=1         \
 	-s ASSERTIONS=0                  \
@@ -926,6 +1018,7 @@ RUN set -euxo pipefail; \
 	-s NODEJS_CATCH_EXIT=0           \
 	-s NODEJS_CATCH_REJECTION=0      \
 	-s INVOKE_RUN=0                  \
+	-o /build/output/php.js \
 	-s EXIT_RUNTIME=1                \
 	-Wl,--wrap=select \
 		/root/lib/libphp.a \

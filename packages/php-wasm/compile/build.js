@@ -12,9 +12,14 @@ const argParser = yargs(process.argv.slice(2))
 	.options({
 		PLATFORM: {
 			type: 'string',
-			choices: ['web-light', 'web-kitchen-sink', 'node'],
-			default: 'web-light',
+			choices: ['web', 'node'],
+			default: 'web',
 			description: 'The platform to build for',
+		},
+		JSPI: {
+			type: 'boolean',
+			default: false,
+			description: 'Build with JSPI support',
 		},
 		DEBUG: {
 			type: 'boolean',
@@ -111,6 +116,12 @@ const argParser = yargs(process.argv.slice(2))
 			description: 'The output directory',
 			required: true,
 		},
+		WITH_OPENSSL_VERSION: {
+			type: 'string',
+			choices: ['1.1.0h', '1.1.1'],
+			description: 'OpenSSL version to use',
+			default: '1.1.0h',
+		},
 	});
 
 const args = argParser.argv;
@@ -120,18 +131,7 @@ const platformDefaults = {
 		PHP_VERSION: '8.0.24',
 		WITH_LIBZIP: 'yes',
 		WITH_SQLITE: 'yes',
-	},
-	['web-light']: {},
-	['web-kitchen-sink']: {
-		WITH_FILEINFO: 'yes',
-		WITH_ICONV: 'yes',
-		WITH_LIBXML: 'yes',
-		WITH_GD: 'yes',
-		WITH_MBSTRING: 'yes',
-		WITH_MBREGEX: 'yes',
-		WITH_OPENSSL: 'yes',
-	},
-	node: {
+		WITH_JSPI: 'no',
 		WITH_CURL: 'yes',
 		WITH_FILEINFO: 'yes',
 		WITH_ICONV: 'yes',
@@ -139,11 +139,14 @@ const platformDefaults = {
 		WITH_GD: 'yes',
 		WITH_MBSTRING: 'yes',
 		WITH_MBREGEX: 'yes',
-		WITH_CLI_SAPI: 'yes',
 		WITH_OPENSSL: 'yes',
+		WITH_WS_NETWORKING_PROXY: 'yes',
+	},
+	web: {},
+	node: {
+		WITH_CLI_SAPI: 'yes',
 		WITH_NODEFS: 'yes',
 		WITH_MYSQL: 'yes',
-		WITH_WS_NETWORKING_PROXY: 'yes',
 	},
 };
 const platform = args.PLATFORM;
@@ -188,6 +191,8 @@ await asyncSpawn(
 		'--build-arg',
 		getArg('PHP_VERSION'),
 		'--build-arg',
+		`OPENSSL_VERSION=${args.WITH_OPENSSL_VERSION || '1.1.0h'}`,
+		'--build-arg',
 		getArg('WITH_FILEINFO'),
 		'--build-arg',
 		getArg('WITH_LIBXML'),
@@ -219,6 +224,8 @@ await asyncSpawn(
 		getArg('WITH_WS_NETWORKING_PROXY'),
 		'--build-arg',
 		`EMSCRIPTEN_ENVIRONMENT=${platform === 'node' ? 'node' : 'web'}`,
+		'--build-arg',
+		getArg('WITH_JSPI'),
 	],
 	{ cwd: sourceDir, stdio: 'inherit' }
 );

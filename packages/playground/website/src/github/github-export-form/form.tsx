@@ -231,7 +231,7 @@ export default function GitHubExportForm({
 			} else if (formValues.contentType === 'plugin') {
 				updatedValues['toPathInRepo'] = `/${formValues.plugin}`;
 			} else {
-				updatedValues['toPathInRepo'] = '/playground';
+				updatedValues['toPathInRepo'] = '/';
 			}
 			setFormValues({
 				...formValues,
@@ -312,6 +312,10 @@ export default function GitHubExportForm({
 				);
 			}
 
+			if (relativeExportPaths.length === 0) {
+				relativeExportPaths = ['/'];
+			}
+
 			const isoDateSlug = new Date().toISOString().replace(/[:.]/g, '-');
 			const newBranchName = `playground-changes-${isoDateSlug}`;
 			let commitMessage = formValues.commitMessage;
@@ -382,7 +386,6 @@ export default function GitHubExportForm({
 					});
 				}
 			}
-
 			const changes = await changeset(
 				new Map(Object.entries(ghComparableFiles)),
 				allPlaygroundFiles
@@ -430,7 +433,7 @@ export default function GitHubExportForm({
 	if (pushResult) {
 		return (
 			<form id="export-playground-form" onSubmit={handleSubmit}>
-				<h2 tabIndex={0} style={{ marginTop: 0, textAlign: 'center' }}>
+				<h2>
 					Pull Request{' '}
 					{formValues.prAction === 'create' ? 'created' : 'updated'}!
 				</h2>
@@ -446,15 +449,13 @@ export default function GitHubExportForm({
 					</a>
 				</p>
 
-				{pushResult.forked ? (
+				{pushResult.forked && (
 					<p>
 						Because of access restrictions set by your organization,
 						these changes could not be submitted directly to the
 						repository. Instead, they were submitted to your fork of
 						the repository.
 					</p>
-				) : (
-					false
 				)}
 
 				<div className={forms.submitRow}>
@@ -469,10 +470,7 @@ export default function GitHubExportForm({
 	return (
 		<GitHubOAuthGuard>
 			<form id="export-playground-form" onSubmit={handleSubmit}>
-				<h2 tabIndex={0} style={{ marginTop: 0, textAlign: 'center' }}>
-					Export to GitHub
-				</h2>
-				<p className={css.modalText}>
+				<p>
 					You may export WordPress plugins, themes, and entire
 					wp-content directories as pull requests to any public GitHub
 					repository.

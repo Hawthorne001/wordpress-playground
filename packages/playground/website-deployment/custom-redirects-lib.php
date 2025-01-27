@@ -5,7 +5,11 @@
  */
 
 // Used during deployment to identify files that need to be served in a custom way via PHP
-function playground_file_needs_special_treatment( $path ) {
+function playground_is_static_file_needing_special_treatment( $path ) {
+	if ( str_ends_with( $path, '.php' ) ) {
+		return false;
+	}
+
 	return (
 		!! playground_maybe_rewrite( $path ) ||
 		!! playground_maybe_redirect( $path ) ||
@@ -86,8 +90,9 @@ function playground_handle_request() {
 		$resolved_path = playground_resolve_to_index_file( $resolved_path );
 	}
 
-	if ( false === $resolved_path ) {
-		$resolved_path = realpath( __DIR__ . '/files-to-serve-via-php' . $requested_path );
+	if ( false === $resolved_path && ! str_ends_with( $requested_path, '.php' ) ) {
+		// Static files that need special treatment are served from a different directory.
+		$resolved_path = realpath( __DIR__ . '/static-files-to-serve-via-php' . $requested_path );
 		if ( is_dir( $resolved_path ) ) {
 			$resolved_path = playground_resolve_to_index_file( $resolved_path );
 		}
@@ -128,9 +133,11 @@ function playground_handle_request() {
 		: false;
 
 	require_once __DIR__ . '/mime-types.php';
-	$content_type = $mime_types[ $extension ] ?? $mime_types['_default'];
-	$log( "Setting Content-Type to '$content_type'" );
-	header( "Content-Type: $content_type" );
+	if ( isset( $mime_types[ $extension ] ) ) {
+		$content_type = $mime_types[ $extension ];
+		$log( "Setting Content-Type to '$content_type'" );
+		header( "Content-Type: $content_type" );
+	}
 
 	$custom_response_headers = playground_get_custom_response_headers( $requested_path );
 	if ( ! empty( $custom_response_headers ) ) {
@@ -156,14 +163,14 @@ function playground_handle_request() {
 	//
 
 	if ( 'php' === $extension ) {
-		$log( "Running PHP: '$resolved_path'" );
+		$log( "Running PHP: '$original_requested_path'" );
 		playground_maybe_set_environment( $requested_path );
-		require $resolved_path;
+		// Let the web server continue executing PHP in a complete environment
 	} else {
 		$log( "Reading static file: '$resolved_path'" );
 		readfile( $resolved_path );
+		die();
 	}
-	die();
 }
 
 function playground_maybe_rewrite( $original_requested_path ) {
@@ -195,21 +202,21 @@ function playground_maybe_redirect( $requested_path ) {
 		str_ends_with( $requested_path, '/builder/index.php' )
 	) {
 		return array(
-			'location' => 'https://playground.wordpress.net/builder/builder.html',
+			'location' => 'builder.html',
 			'status' => 301
 		);
 	}
 
 	if ( str_ends_with( $requested_path, '/wordpress' ) ) {
 		return array(
-			'location' => 'https://playground.wordpress.net/wordpress.html',
+			'location' => 'wordpress.html',
 			'status' => 301
 		);
 	}
 
 	if ( str_ends_with( $requested_path, '/gutenberg' ) ) {
 		return array(
-			'location' => 'https://playground.wordpress.net/gutenberg.html',
+			'location' => 'gutenberg.html',
 			'status' => 301
 		);
 	}
@@ -217,6 +224,20 @@ function playground_maybe_redirect( $requested_path ) {
 	if ( str_ends_with( $requested_path, '/proxy' ) ) {
 		return array(
 			'location' => 'https://github-proxy.com/',
+			'status' => 301
+		);
+	}
+
+	if ( $requested_path === '/release' ) {
+		// Make this redirect relative to `release` in case we implement
+		// subdir staging for the Playground website.
+		$redirect_base_path = substr($requested_path, 0, - strlen('release'));
+		$redirect_location = 
+			$redirect_base_path .
+			'?blueprint-url=https://raw.githubusercontent.com/wordpress/blueprints/trunk/blueprints/beta-rc/blueprint.json';
+
+		return array(
+			'location' => $redirect_location,
 			'status' => 301
 		);
 	}
@@ -250,71 +271,50 @@ function playground_maybe_set_environment( $requested_path ) {
 	}
 
 	if ( str_ends_with( $requested_path, 'logger.php' ) ) {
-		// TODO: Remove this condition when we can confirm __atomic_env_define() is again always defined
-		if ( function_exists( '__atomic_env_define' ) ) {
-			// WORKAROUND: Atomic_Persistent_Data wants the DB_PASSWORD constant
-			// which is not set yet. But we can force its definition.
-			__atomic_env_define( 'DB_PASSWORD' );
-
-			$secrets = new Atomic_Persistent_Data;
-			if ( isset(
-				$secrets->LOGGER_SLACK_CHANNEL,
-				$secrets->LOGGER_SLACK_TOKEN,
-			) ) {
-				putenv( "SLACK_CHANNEL={$secrets->LOGGER_SLACK_CHANNEL}" );
-				putenv( "SLACK_TOKEN={$secrets->LOGGER_SLACK_TOKEN}" );
-			} else {
-				error_log( 'PLAYGROUND: Missing secrets for logger.php' );
-			}
+		// Define DB_PASSWORD early so Atomic_Persistent_Data can work.
+		__atomic_env_define( 'DB_PASSWORD' );
+		$secrets = new Atomic_Persistent_Data;
+		if ( isset(
+			$secrets->LOGGER_SLACK_CHANNEL,
+			$secrets->LOGGER_SLACK_TOKEN,
+		) ) {
+			putenv( "SLACK_CHANNEL={$secrets->LOGGER_SLACK_CHANNEL}" );
+			putenv( "SLACK_TOKEN={$secrets->LOGGER_SLACK_TOKEN}" );
 		} else {
-			error_log( 'PLAYGROUND: Unable to access secrets for logger.php' );
+			error_log( 'PLAYGROUND: Missing secrets for logger.php' );
 		}
 
 		return true;
 	}
 
 	if ( str_ends_with( $requested_path, 'plugin-proxy.php' ) ) {
-		// TODO: Remove this condition when we can confirm __atomic_env_define() is again always defined
-		if ( function_exists( '__atomic_env_define' ) ) {
-			// WORKAROUND: Atomic_Persistent_Data wants the DB_PASSWORD constant
-			// which is not set yet. But we can force its definition.
-			__atomic_env_define( 'DB_PASSWORD' );
-
-			$secrets = new Atomic_Persistent_Data;
-			if ( isset( $secrets->GITHUB_TOKEN ) ) {
-				putenv( "GITHUB_TOKEN={$secrets->GITHUB_TOKEN}" );
-			} else {
-				error_log( 'PLAYGROUND: Missing secrets for plugin-proxy.php' );
-			}
+		// Define DB_PASSWORD early so Atomic_Persistent_Data can work.
+		__atomic_env_define( 'DB_PASSWORD' );
+		$secrets = new Atomic_Persistent_Data;
+		if ( isset( $secrets->GITHUB_TOKEN ) ) {
+			putenv( "GITHUB_TOKEN={$secrets->GITHUB_TOKEN}" );
 		} else {
-			error_log( 'PLAYGROUND: Unable to access secrets for plugin-proxy.php' );
+			error_log( 'PLAYGROUND: Missing secrets for plugin-proxy.php' );
 		}
+
 		return true;
 	}
 
 	if ( str_ends_with( $requested_path, 'oauth.php' ) ) {
-		// TODO: Remove this condition when we can confirm __atomic_env_define() is again always defined
-		if ( function_exists( '__atomic_env_define' ) ) {
-			// WORKAROUND: Atomic_Persistent_Data wants the DB_PASSWORD constant
-			// which is not set yet. But we can force its definition.
-			__atomic_env_define( 'DB_PASSWORD' );
-
-			$secrets = new Atomic_Persistent_Data;
-			if ( isset(
-				$secrets->GITHUB_APP_CLIENT_ID,
-				$secrets->GITHUB_APP_CLIENT_SECRET,
-			) ) {
-				putenv( "CLIENT_ID={$secrets->GITHUB_APP_CLIENT_ID}" );
-				putenv( "CLIENT_SECRET={$secrets->GITHUB_APP_CLIENT_SECRET}" );
-			} else {
-				error_log( 'PLAYGROUND: Missing secrets for oauth.php' );
-			}
+		// Define DB_PASSWORD early so Atomic_Persistent_Data can work.
+		__atomic_env_define( 'DB_PASSWORD' );
+		$secrets = new Atomic_Persistent_Data;
+		if ( isset(
+			$secrets->GITHUB_APP_CLIENT_ID,
+			$secrets->GITHUB_APP_CLIENT_SECRET,
+		) ) {
+			putenv( "CLIENT_ID={$secrets->GITHUB_APP_CLIENT_ID}" );
+			putenv( "CLIENT_SECRET={$secrets->GITHUB_APP_CLIENT_SECRET}" );
 		} else {
-			error_log( 'PLAYGROUND: Unable to access secrets for oauth.php' );
+			error_log( 'PLAYGROUND: Missing secrets for oauth.php' );
 		}
 		return true;
 	}
-
 
 	return false;
 }

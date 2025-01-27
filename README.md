@@ -12,9 +12,9 @@ WordPress Playground exists to make WordPress instantly accessible for users, le
 
 Playground aims to facilitate:
 
-– Learning WordPress Through Exploration
-– Learning WordPress Development Through Writing Code
-– Instant access to WordPress ecosystem
+-   Learning WordPress Through Exploration
+-   Learning WordPress Development Through Writing Code
+-   Instant access to WordPress ecosystem
 
 Learn more about the [vision](https://github.com/WordPress/wordpress-playground/issues/472) and the [roadmap](https://github.com/WordPress/wordpress-playground/issues/525).
 
@@ -51,7 +51,7 @@ You can connect to the Playground using the JavaScript client. Here's an example
 				},
 				{
 					step: 'installPlugin',
-					pluginZipFile: {
+					pluginData: {
 						resource: 'wordpress.org/plugins',
 						slug: 'friends',
 					},
@@ -84,7 +84,7 @@ The vanilla `git clone` command will take ages. Here's a faster alternative that
 only pull the latest revision of the trunk branch:
 
 ```
-git clone -b trunk --single-branch --depth 1 git@github.com:WordPress/wordpress-playground.git
+git clone -b trunk --single-branch --depth 1 --recurse-submodules https://github.com/WordPress/wordpress-playground.git
 ```
 
 ## Running WordPress Playground locally
@@ -92,7 +92,7 @@ git clone -b trunk --single-branch --depth 1 git@github.com:WordPress/wordpress-
 You also can run WordPress Playground locally as follows:
 
 ```bash
-git clone -b trunk --single-branch --depth 1 git@github.com:WordPress/wordpress-playground.git
+git clone -b trunk --single-branch --depth 1 --recurse-submodules https://github.com/WordPress/wordpress-playground.git
 cd wordpress-playground
 npm install
 npm run dev
@@ -113,10 +113,10 @@ npx nx start php-wasm-cli
 # Build latest WordPress releases
 npx nx bundle-wordpress:all playground-wordpress-builds
 
-# Recompile PHP 5.6 - 8.2 releases to .wasm for web
+# Recompile PHP 7.0 - 8.3 releases to .wasm for web
 npx nx recompile-php:all php-wasm-web
 
-# Recompile PHP 5.6 - 8.2 releases to .wasm for node
+# Recompile PHP 7.0 - 8.3 releases to .wasm for node
 npx nx recompile-php:all php-wasm-node
 
 # Builds the documentation site
@@ -167,13 +167,14 @@ Here's a few quickstart guides to get you started:
 
 -   Code contributions – see the [developer section](https://wordpress.github.io/wordpress-playground/docs/contributing/code).
 -   Documentation – see the [documentation section](https://wordpress.github.io/wordpress-playground/docs/contributing/documentation).
--   Triage – see the [triage section](https://wordpress.github.io/wordpress-playground/docs/contributing/publishing).
+-   Triage – see the [triage section](https://wordpress.github.io/wordpress-playground/contributing/#triaging-issues).
+-   Contributions to translations – see the [translations section](https://wordpress.github.io/wordpress-playground/contributing/translations).
 -   Reporting bugs – open an [issue](https://github.com/WordPress/wordpress-playground/issues/new) in the repository.
 -   Ideas, designs or anything else – open a [GitHub discussion](https://github.com/WordPress/wordpress-playground/discussions) and let's talk!
 
 ## WordCamp Contributor Day
 
-If you're participating in a WordCamp Contributor Day, you can use the following instructions to get started: [WordCamp Contributor Day](https://wordpress.github.io/wordpress-playground/docs/wordcamp-contributor-day/).
+If you're participating in a WordCamp Contributor Day, you can use the following instructions to get started: [WordCamp Contributor Day](https://wordpress.github.io/wordpress-playground/contributing/contributor-day/).
 
 ## Backwards compatibility
 

@@ -13,12 +13,13 @@ rm -rf website-update
 
 echo Moving updated Playground files to staging directory
 mv updated-playground-files website-update
-mkdir website-update/files-to-serve-via-php
+mkdir website-update/static-files-to-serve-via-php
 
 echo Copy supporting files for WP Cloud
 cp -r ~/website-deployment/__wp__ ~/website-update/
 cp ~/website-deployment/custom-redirects-lib.php ~/website-update/
 cp ~/website-deployment/custom-redirects.php ~/website-update/
+cp ~/website-deployment/cors-proxy-config.php ~/website-update/
 
 # Generate mime-types.php from mime-types.json in case the PHP can be opcached
 echo Generating mime-types.php
@@ -60,24 +61,24 @@ echo Checking mime-types.php
 echo Adding mime-types.php to updated website files
 cp ~/website-deployment/mime-types.php ~/website-update/
 
-function match_files_to_serve_via_php() (
+function match_static_files_to_serve_via_php() (
     cd ~/website-deployment
 
     "$SITE_PHP" -r '
     require "custom-redirects-lib.php";
     while ( $path = fgets( STDIN ) ) {
         $path = trim( $path );
-	if ( playground_file_needs_special_treatment($path) ) {
+        if ( playground_is_static_file_needing_special_treatment($path) ) {
             echo "$path\n";
         }
     }
     '
 )
 
-function set_aside_files_to_serve_via_php() {
+function set_aside_static_files_to_serve_via_php() {
     while read FILE_TO_SERVE_VIA_PHP; do
         echo "  php-served: $FILE_TO_SERVE_VIA_PHP"
-        TARGET_DIR="files-to-serve-via-php/$(dirname "$FILE_TO_SERVE_VIA_PHP")"
+        TARGET_DIR="static-files-to-serve-via-php/$(dirname "$FILE_TO_SERVE_VIA_PHP")"
         mkdir -p "$TARGET_DIR"
         mv "$FILE_TO_SERVE_VIA_PHP" "$TARGET_DIR/"
     done
@@ -86,11 +87,11 @@ function set_aside_files_to_serve_via_php() {
 echo Configure which files should be served by Nginx and which by PHP
 cd ~/website-update
 find -type f |
-    grep -v files-to-serve-via-php |   # avoid files that are moved as part of this pipeline
+    grep -v static-files-to-serve-via-php |   # avoid files that are moved as part of this pipeline
     sed 's#^\.##' |                    # filter '.' from './' so paths are like request URIs
-    match_files_to_serve_via_php |
+    match_static_files_to_serve_via_php |
     sed 's#^/##' |                     # remove the leading '/' to get paths relative to current dir
-    set_aside_files_to_serve_via_php
+    set_aside_static_files_to_serve_via_php
 
 echo Syncing staged files to production
 rsync -av --delete --no-perms --omit-dir-times ~/website-update/ /srv/htdocs/
@@ -100,4 +101,10 @@ curl -sS -X POST -H "Auth: $ATOMIC_SITE_API_KEY" "$SITE_API_BASE/edge-cache/$ATO
         > /dev/null \
         && echo "Edge cache purged" \
         || (>&2 echo "Failed to purge edge cache" && false)
+
+echo Applying latest CORS proxy rate-limiting schema
+# NOTE: This will reset rate-limiting token buckets, but that should be tolerable
+# as long as we're generally discouraging abuse of the proxy.
+cat ~/website-deployment/cors-proxy-rate-limiting-table.sql | mysql --database="$DB_NAME"
+
 echo Done!

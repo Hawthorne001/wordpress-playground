@@ -18,6 +18,7 @@ const plugins = [
 	dts({
 		entryRoot: 'src',
 		tsconfigPath: join(__dirname, 'tsconfig.lib.json'),
+		pathsToAliases: false,
 	}),
 	/**
 	 * Copy the `.htaccess` file to the `dist` directory.
@@ -91,6 +92,7 @@ export default defineConfig({
 		//            in the app mode.
 		// @see https://github.com/vitejs/vite/issues/3295
 		assetsInlineLimit: 0,
+		sourcemap: true,
 		rollupOptions: {
 			input: {
 				wordpress: path('/remote.html'),

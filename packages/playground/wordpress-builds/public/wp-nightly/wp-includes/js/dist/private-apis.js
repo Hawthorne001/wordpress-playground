@@ -42,7 +42,7 @@ __webpack_require__.d(__webpack_exports__, {
   __dangerousOptInToUnstableAPIsOnlyForCoreModules: () => (/* reexport */ __dangerousOptInToUnstableAPIsOnlyForCoreModules)
 });
 
-;// CONCATENATED MODULE: ./node_modules/@wordpress/private-apis/build-module/implementation.js
+;// ./node_modules/@wordpress/private-apis/build-module/implementation.js
 /**
  * wordpress/private-apis – the utilities to enable private cross-package
  * exports of private APIs.
@@ -54,7 +54,7 @@ __webpack_require__.d(__webpack_exports__, {
 /**
  * The list of core modules allowed to opt-in to the private APIs.
  */
-const CORE_MODULES_USING_PRIVATE_APIS = ['@wordpress/block-directory', '@wordpress/block-editor', '@wordpress/block-library', '@wordpress/blocks', '@wordpress/commands', '@wordpress/components', '@wordpress/core-commands', '@wordpress/core-data', '@wordpress/customize-widgets', '@wordpress/data', '@wordpress/edit-post', '@wordpress/edit-site', '@wordpress/edit-widgets', '@wordpress/editor', '@wordpress/format-library', '@wordpress/interface', '@wordpress/patterns', '@wordpress/preferences', '@wordpress/reusable-blocks', '@wordpress/router', '@wordpress/dataviews'];
+const CORE_MODULES_USING_PRIVATE_APIS = ['@wordpress/block-directory', '@wordpress/block-editor', '@wordpress/block-library', '@wordpress/blocks', '@wordpress/commands', '@wordpress/components', '@wordpress/core-commands', '@wordpress/core-data', '@wordpress/customize-widgets', '@wordpress/data', '@wordpress/edit-post', '@wordpress/edit-site', '@wordpress/edit-widgets', '@wordpress/editor', '@wordpress/format-library', '@wordpress/interface', '@wordpress/patterns', '@wordpress/preferences', '@wordpress/reusable-blocks', '@wordpress/router', '@wordpress/dataviews', '@wordpress/fields'];
 
 /**
  * A list of core modules that already opted-in to
@@ -226,7 +226,7 @@ function resetRegisteredPrivateApis() {
   }
 }
 
-;// CONCATENATED MODULE: ./node_modules/@wordpress/private-apis/build-module/index.js
+;// ./node_modules/@wordpress/private-apis/build-module/index.js
 
 
 (window.wp = window.wp || {}).privateApis = __webpack_exports__;

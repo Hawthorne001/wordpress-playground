@@ -1,13 +1,12 @@
-import {
-	SupportedPHPExtensionBundle,
-	SupportedPHPVersion,
-} from '@php-wasm/universal';
+import { SupportedPHPVersion } from '@php-wasm/universal';
 import { StepDefinition } from './steps';
 import { FileReference } from './resources';
 
 export type ExtraLibrary =
 	// Install WP-CLI during boot.
 	'wp-cli';
+
+export type PHPConstants = Record<string, string | boolean | number>;
 
 export interface Blueprint {
 	/**
@@ -72,7 +71,7 @@ export interface Blueprint {
 	/**
 	 * PHP Constants to define on every request
 	 */
-	constants?: Record<string, string>;
+	constants?: PHPConstants;
 
 	/**
 	 * WordPress plugins to install and activate
@@ -99,9 +98,9 @@ export interface Blueprint {
 		  };
 
 	/**
-	 * The PHP extensions to use.
+	 * @deprecated No longer used. Feel free to remove it from your Blueprint.
 	 */
-	phpExtensionBundles?: SupportedPHPExtensionBundle[];
+	phpExtensionBundles?: any;
 	/**
 	 * The steps to run after every other operation in this Blueprint was
 	 * executed.

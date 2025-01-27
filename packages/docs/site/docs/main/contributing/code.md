@@ -16,8 +16,8 @@ Browse [the list of open issues](https://github.com/wordpress/wordpress-playgrou
 
 Be sure to review the following resources before you begin:
 
--   [Coding principles](./coding-standards.md)
--   [Architecture](../../developers/23-architecture/01-index.md)
+-   [Coding principles](/contributing/coding-standards)
+-   [Architecture](/developers/architecture)
 -   [Vision and Philosophy](https://github.com/WordPress/wordpress-playground/issues/472)
 -   [WordPress Playground Roadmap](https://github.com/WordPress/wordpress-playground/issues/525)
 
@@ -26,7 +26,7 @@ Be sure to review the following resources before you begin:
 [Fork the Playground repository](https://github.com/WordPress/wordpress-playground/fork) and clone it to your local machine. To do that, copy and paste these commands into your terminal:
 
 ```bash
-git clone -b trunk --single-branch --depth 1
+git clone -b trunk --single-branch --depth 1 --recurse-submodules
 
 # replace `YOUR-GITHUB-USERNAME` with your GitHub username:
 git@github.com:YOUR-GITHUB-USERNAME/wordpress-playground.git

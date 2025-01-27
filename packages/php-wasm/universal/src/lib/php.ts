@@ -47,6 +47,11 @@ export type MountHandler = (
 export const PHP_INI_PATH = '/internal/shared/php.ini';
 const AUTO_PREPEND_SCRIPT = '/internal/shared/auto_prepend_file.php';
 
+type MountObject = {
+	mountHandler: MountHandler;
+	unmount: () => Promise<any>;
+};
+
 /**
  * An environment-agnostic wrapper around the Emscripten PHP runtime
  * that universals the super low-level API and provides a more convenient
@@ -62,6 +67,7 @@ export class PHP implements Disposable {
 	#wasmErrorsTarget: UnhandledRejectionsTarget | null = null;
 	#eventListeners: Map<string, Set<PHPEventListener>> = new Map();
 	#messageListeners: MessageListener[] = [];
+	#mounts: Record<string, MountObject> = {};
 	requestHandler?: PHPRequestHandler;
 
 	/**
@@ -160,6 +166,11 @@ export class PHP implements Disposable {
 	 */
 	onMessage(listener: MessageListener) {
 		this.#messageListeners.push(listener);
+		return async () => {
+			this.#messageListeners = this.#messageListeners.filter(
+				(l) => l !== listener
+			);
+		};
 	}
 
 	async setSpawnHandler(handler: SpawnHandler | string) {
@@ -229,8 +240,7 @@ export class PHP implements Disposable {
 					'always_populate_raw_post_data = -1',
 					'upload_max_filesize = 2000M',
 					'post_max_size = 2000M',
-					'disable_functions = curl_exec,curl_multi_exec',
-					'allow_url_fopen = Off',
+					'allow_url_fopen = On',
 					'allow_url_include = Off',
 					'session.save_path = /home/web_user',
 					'implicit_flush = 1',
@@ -939,6 +949,44 @@ export class PHP implements Disposable {
 	}
 
 	/**
+	 * Creates a symlink in the PHP filesystem.
+	 * @param target
+	 * @param path
+	 */
+	symlink(target: string, path: string) {
+		return FSHelpers.symlink(this[__private__dont__use].FS, target, path);
+	}
+
+	/**
+	 * Checks if a path is a symlink in the PHP filesystem.
+	 *
+	 * @param path
+	 * @returns True if the path is a symlink, false otherwise.
+	 */
+	isSymlink(path: string) {
+		return FSHelpers.isSymlink(this[__private__dont__use].FS, path);
+	}
+
+	/**
+	 * Reads the target of a symlink in the PHP filesystem.
+	 *
+	 * @param path
+	 * @returns The target of the symlink.
+	 */
+	readlink(path: string) {
+		return FSHelpers.readlink(this[__private__dont__use].FS, path);
+	}
+
+	/**
+	 * Resolves the real path of a file in the PHP filesystem.
+	 * @param path
+	 * @returns The real path of the file.
+	 */
+	realpath(path: string) {
+		return FSHelpers.realpath(this[__private__dont__use].FS, path);
+	}
+
+	/**
 	 * Checks if a file (or a directory) exists in the PHP filesystem.
 	 *
 	 * @param  path - The file path to check.
@@ -958,7 +1006,7 @@ export class PHP implements Disposable {
 	 *             is fully decoupled from the request handler and
 	 *             accepts a constructor-level cwd argument.
 	 */
-	hotSwapPHPRuntime(runtime: number, cwd?: string) {
+	async hotSwapPHPRuntime(runtime: number, cwd?: string) {
 		// Once we secure the lock and have the new runtime ready,
 		// the rest of the swap handler is synchronous to make sure
 		// no other operations acts on the old runtime or FS.
@@ -966,7 +1014,16 @@ export class PHP implements Disposable {
 		// asynchronous changes to either the filesystem or the
 		// old PHP runtime without propagating them to the new
 		// runtime.
+
 		const oldFS = this[__private__dont__use].FS;
+
+		// Unmount all the mount handlers
+		const mountHandlers: { mountHandler: MountHandler; vfsPath: string }[] =
+			[];
+		for (const [vfsPath, mount] of Object.entries(this.#mounts)) {
+			mountHandlers.push({ mountHandler: mount.mountHandler, vfsPath });
+			await mount.unmount();
+		}
 
 		// Kill the current runtime
 		try {
@@ -982,9 +1039,18 @@ export class PHP implements Disposable {
 			this.setSapiName(this.#sapiName);
 		}
 
+		// Copy the old /internal directory to the new filesystem
+		copyFS(oldFS, this[__private__dont__use].FS, '/internal');
+
 		// Copy the MEMFS directory structure from the old FS to the new one
 		if (cwd) {
 			copyFS(oldFS, this[__private__dont__use].FS, cwd);
+		}
+
+		// Re-mount all the mount handlers
+		for (const { mountHandler, vfsPath } of mountHandlers) {
+			this.mkdir(vfsPath);
+			await this.mount(vfsPath, mountHandler);
 		}
 	}
 
@@ -999,11 +1065,22 @@ export class PHP implements Disposable {
 		virtualFSPath: string,
 		mountHandler: MountHandler
 	): Promise<UnmountFunction> {
-		return await mountHandler(
+		const unmountCallback = await mountHandler(
 			this,
 			this[__private__dont__use].FS,
 			virtualFSPath
 		);
+		const mountObject = {
+			mountHandler,
+			unmount: async () => {
+				await unmountCallback();
+				delete this.#mounts[virtualFSPath];
+			},
+		};
+		this.#mounts[virtualFSPath] = mountObject;
+		return () => {
+			mountObject.unmount();
+		};
 	}
 
 	/**

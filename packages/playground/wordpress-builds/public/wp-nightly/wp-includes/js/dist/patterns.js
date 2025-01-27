@@ -60,9 +60,9 @@ __webpack_require__.d(selectors_namespaceObject, {
   isEditingPattern: () => (selectors_isEditingPattern)
 });
 
-;// CONCATENATED MODULE: external ["wp","data"]
+;// external ["wp","data"]
 const external_wp_data_namespaceObject = window["wp"]["data"];
-;// CONCATENATED MODULE: ./node_modules/@wordpress/patterns/build-module/store/reducer.js
+;// ./node_modules/@wordpress/patterns/build-module/store/reducer.js
 /**
  * WordPress dependencies
  */
@@ -80,13 +80,13 @@ function isEditingPattern(state = {}, action) {
   isEditingPattern
 }));
 
-;// CONCATENATED MODULE: external ["wp","blocks"]
+;// external ["wp","blocks"]
 const external_wp_blocks_namespaceObject = window["wp"]["blocks"];
-;// CONCATENATED MODULE: external ["wp","coreData"]
+;// external ["wp","coreData"]
 const external_wp_coreData_namespaceObject = window["wp"]["coreData"];
-;// CONCATENATED MODULE: external ["wp","blockEditor"]
+;// external ["wp","blockEditor"]
 const external_wp_blockEditor_namespaceObject = window["wp"]["blockEditor"];
-;// CONCATENATED MODULE: ./node_modules/@wordpress/patterns/build-module/constants.js
+;// ./node_modules/@wordpress/patterns/build-module/constants.js
 const PATTERN_TYPES = {
   theme: 'pattern',
   user: 'wp_block'
@@ -108,7 +108,7 @@ const PARTIAL_SYNCING_SUPPORTED_BLOCKS = {
 };
 const PATTERN_OVERRIDES_BINDING_SOURCE = 'core/pattern-overrides';
 
-;// CONCATENATED MODULE: ./node_modules/@wordpress/patterns/build-module/store/actions.js
+;// ./node_modules/@wordpress/patterns/build-module/store/actions.js
 /**
  * WordPress dependencies
  */
@@ -226,13 +226,13 @@ function setEditingPattern(clientId, isEditing) {
   };
 }
 
-;// CONCATENATED MODULE: ./node_modules/@wordpress/patterns/build-module/store/constants.js
+;// ./node_modules/@wordpress/patterns/build-module/store/constants.js
 /**
  * Module Constants
  */
 const STORE_NAME = 'core/patterns';
 
-;// CONCATENATED MODULE: ./node_modules/@wordpress/patterns/build-module/store/selectors.js
+;// ./node_modules/@wordpress/patterns/build-module/store/selectors.js
 /**
  * Returns true if pattern is in the editing state.
  *
@@ -244,9 +244,9 @@ function selectors_isEditingPattern(state, clientId) {
   return state.isEditingPattern[clientId];
 }
 
-;// CONCATENATED MODULE: external ["wp","privateApis"]
+;// external ["wp","privateApis"]
 const external_wp_privateApis_namespaceObject = window["wp"]["privateApis"];
-;// CONCATENATED MODULE: ./node_modules/@wordpress/patterns/build-module/lock-unlock.js
+;// ./node_modules/@wordpress/patterns/build-module/lock-unlock.js
 /**
  * WordPress dependencies
  */
@@ -256,7 +256,7 @@ const {
   unlock
 } = (0,external_wp_privateApis_namespaceObject.__dangerousOptInToUnstableAPIsOnlyForCoreModules)('I acknowledge private features are not for use in themes or plugins and doing so will break in the next version of WordPress.', '@wordpress/patterns');
 
-;// CONCATENATED MODULE: ./node_modules/@wordpress/patterns/build-module/store/index.js
+;// ./node_modules/@wordpress/patterns/build-module/store/index.js
 /**
  * WordPress dependencies
  */
@@ -296,13 +296,13 @@ const store = (0,external_wp_data_namespaceObject.createReduxStore)(STORE_NAME, 
 unlock(store).registerPrivateActions(actions_namespaceObject);
 unlock(store).registerPrivateSelectors(selectors_namespaceObject);
 
-;// CONCATENATED MODULE: external ["wp","components"]
+;// external ["wp","components"]
 const external_wp_components_namespaceObject = window["wp"]["components"];
-;// CONCATENATED MODULE: external ["wp","element"]
+;// external ["wp","element"]
 const external_wp_element_namespaceObject = window["wp"]["element"];
-;// CONCATENATED MODULE: external ["wp","i18n"]
+;// external ["wp","i18n"]
 const external_wp_i18n_namespaceObject = window["wp"]["i18n"];
-;// CONCATENATED MODULE: ./node_modules/@wordpress/patterns/build-module/api/index.js
+;// ./node_modules/@wordpress/patterns/build-module/api/index.js
 /**
  * Internal dependencies
  */
@@ -335,9 +335,9 @@ function hasOverridableBlocks(blocks) {
   });
 }
 
-;// CONCATENATED MODULE: external "ReactJSXRuntime"
+;// external "ReactJSXRuntime"
 const external_ReactJSXRuntime_namespaceObject = window["ReactJSXRuntime"];
-;// CONCATENATED MODULE: ./node_modules/@wordpress/patterns/build-module/components/overrides-panel.js
+;// ./node_modules/@wordpress/patterns/build-module/components/overrides-panel.js
 /**
  * WordPress dependencies
  */
@@ -376,13 +376,13 @@ function OverridesPanel() {
   });
 }
 
-;// CONCATENATED MODULE: external ["wp","notices"]
+;// external ["wp","notices"]
 const external_wp_notices_namespaceObject = window["wp"]["notices"];
-;// CONCATENATED MODULE: external ["wp","compose"]
+;// external ["wp","compose"]
 const external_wp_compose_namespaceObject = window["wp"]["compose"];
-;// CONCATENATED MODULE: external ["wp","htmlEntities"]
+;// external ["wp","htmlEntities"]
 const external_wp_htmlEntities_namespaceObject = window["wp"]["htmlEntities"];
-;// CONCATENATED MODULE: ./node_modules/@wordpress/patterns/build-module/components/category-selector.js
+;// ./node_modules/@wordpress/patterns/build-module/components/category-selector.js
 /**
  * WordPress dependencies
  */
@@ -434,7 +434,7 @@ function CategorySelector({
   });
 }
 
-;// CONCATENATED MODULE: ./node_modules/@wordpress/patterns/build-module/private-hooks.js
+;// ./node_modules/@wordpress/patterns/build-module/private-hooks.js
 /**
  * WordPress dependencies
  */
@@ -529,7 +529,7 @@ function useAddPatternCategory() {
   };
 }
 
-;// CONCATENATED MODULE: ./node_modules/@wordpress/patterns/build-module/components/create-pattern-modal.js
+;// ./node_modules/@wordpress/patterns/build-module/components/create-pattern-modal.js
 /**
  * WordPress dependencies
  */
@@ -560,6 +560,8 @@ function CreatePatternModal({
     title: modalTitle || defaultModalTitle,
     onRequestClose: restProps.onClose,
     overlayClassName: className,
+    focusOnMount: "firstContentElement",
+    size: "small",
     children: /*#__PURE__*/(0,external_ReactJSXRuntime_namespaceObject.jsx)(CreatePatternModalContents, {
       ...restProps
     })
@@ -633,6 +635,7 @@ function CreatePatternModalContents({
         onChange: setCategoryTerms,
         categoryMap: categoryMap
       }), /*#__PURE__*/(0,external_ReactJSXRuntime_namespaceObject.jsx)(external_wp_components_namespaceObject.ToggleControl, {
+        __nextHasNoMarginBottom: true,
         label: (0,external_wp_i18n_namespaceObject._x)('Synced', 'pattern (singular)'),
         help: (0,external_wp_i18n_namespaceObject.__)('Sync this pattern across multiple locations.'),
         checked: syncType === PATTERN_SYNC_TYPES.full,
@@ -662,7 +665,7 @@ function CreatePatternModalContents({
   });
 }
 
-;// CONCATENATED MODULE: ./node_modules/@wordpress/patterns/build-module/components/duplicate-pattern-modal.js
+;// ./node_modules/@wordpress/patterns/build-module/components/duplicate-pattern-modal.js
 /**
  * WordPress dependencies
  */
@@ -680,7 +683,7 @@ function CreatePatternModalContents({
 function getTermLabels(pattern, categories) {
   // Theme patterns rely on core pattern categories.
   if (pattern.type !== PATTERN_TYPES.user) {
-    return categories.core?.filter(category => pattern.categories.includes(category.name)).map(category => category.label);
+    return categories.core?.filter(category => pattern.categories?.includes(category.name)).map(category => category.label);
   }
   return categories.user?.filter(category => pattern.wp_pattern_category.includes(category.id)).map(category => category.label);
 }
@@ -710,13 +713,13 @@ function useDuplicatePatternProps({
     defaultSyncType: pattern.type !== PATTERN_TYPES.user // Theme patterns are unsynced by default.
     ? PATTERN_SYNC_TYPES.unsynced : pattern.wp_pattern_sync_status || PATTERN_SYNC_TYPES.full,
     defaultTitle: (0,external_wp_i18n_namespaceObject.sprintf)( /* translators: %s: Existing pattern title */
-    (0,external_wp_i18n_namespaceObject.__)('%s (Copy)'), typeof pattern.title === 'string' ? pattern.title : pattern.title.raw),
+    (0,external_wp_i18n_namespaceObject._x)('%s (Copy)', 'pattern'), typeof pattern.title === 'string' ? pattern.title : pattern.title.raw),
     onSuccess: ({
       pattern: newPattern
     }) => {
       createSuccessNotice((0,external_wp_i18n_namespaceObject.sprintf)(
       // translators: %s: The new pattern's title e.g. 'Call to action (copy)'.
-      (0,external_wp_i18n_namespaceObject.__)('"%s" duplicated.'), newPattern.title.raw), {
+      (0,external_wp_i18n_namespaceObject._x)('"%s" duplicated.', 'pattern'), newPattern.title.raw), {
         type: 'snackbar',
         id: 'patterns-create'
       });
@@ -747,7 +750,7 @@ function DuplicatePatternModal({
   });
 }
 
-;// CONCATENATED MODULE: ./node_modules/@wordpress/patterns/build-module/components/rename-pattern-modal.js
+;// ./node_modules/@wordpress/patterns/build-module/components/rename-pattern-modal.js
 /**
  * WordPress dependencies
  */
@@ -818,6 +821,8 @@ function RenamePatternModal({
     title: (0,external_wp_i18n_namespaceObject.__)('Rename'),
     ...props,
     onRequestClose: onClose,
+    focusOnMount: "firstContentElement",
+    size: "small",
     children: /*#__PURE__*/(0,external_ReactJSXRuntime_namespaceObject.jsx)("form", {
       onSubmit: onRename,
       children: /*#__PURE__*/(0,external_ReactJSXRuntime_namespaceObject.jsxs)(external_wp_components_namespaceObject.__experimentalVStack, {
@@ -848,9 +853,9 @@ function RenamePatternModal({
   });
 }
 
-;// CONCATENATED MODULE: external ["wp","primitives"]
+;// external ["wp","primitives"]
 const external_wp_primitives_namespaceObject = window["wp"]["primitives"];
-;// CONCATENATED MODULE: ./node_modules/@wordpress/icons/build-module/library/symbol.js
+;// ./node_modules/@wordpress/icons/build-module/library/symbol.js
 /**
  * WordPress dependencies
  */
@@ -865,7 +870,7 @@ const symbol = /*#__PURE__*/(0,external_ReactJSXRuntime_namespaceObject.jsx)(ext
 });
 /* harmony default export */ const library_symbol = (symbol);
 
-;// CONCATENATED MODULE: ./node_modules/@wordpress/patterns/build-module/components/pattern-convert-button.js
+;// ./node_modules/@wordpress/patterns/build-module/components/pattern-convert-button.js
 /**
  * WordPress dependencies
  */
@@ -940,7 +945,11 @@ function PatternConvertButton({
     // Hide when block doesn't support being made into a pattern.
     (0,external_wp_blocks_namespaceObject.hasBlockSupport)(block.name, 'reusable', true)) &&
     // Hide when current doesn't have permission to do that.
-    !!canUser('create', 'blocks');
+    // Blocks refers to the wp_block post type, this checks the ability to create a post of that type.
+    !!canUser('create', {
+      kind: 'postType',
+      name: 'wp_block'
+    });
     return _canConvert;
   }, [clientIds, rootClientId]);
   const {
@@ -993,9 +1002,9 @@ function PatternConvertButton({
   });
 }
 
-;// CONCATENATED MODULE: external ["wp","url"]
+;// external ["wp","url"]
 const external_wp_url_namespaceObject = window["wp"]["url"];
-;// CONCATENATED MODULE: ./node_modules/@wordpress/patterns/build-module/components/patterns-manage-button.js
+;// ./node_modules/@wordpress/patterns/build-module/components/patterns-manage-button.js
 /**
  * WordPress dependencies
  */
@@ -1034,12 +1043,19 @@ function PatternsManageButton({
     const reusableBlock = getBlock(clientId);
     return {
       canRemove: canRemoveBlock(clientId),
-      isVisible: !!reusableBlock && (0,external_wp_blocks_namespaceObject.isReusableBlock)(reusableBlock) && !!canUser('update', 'blocks', reusableBlock.attributes.ref),
+      isVisible: !!reusableBlock && (0,external_wp_blocks_namespaceObject.isReusableBlock)(reusableBlock) && !!canUser('update', {
+        kind: 'postType',
+        name: 'wp_block',
+        id: reusableBlock.attributes.ref
+      }),
       innerBlockCount: getBlockCount(clientId),
       // The site editor and templates both check whether the user
       // has edit_theme_options capabilities. We can leverage that here
       // and omit the manage patterns link if the user can't access it.
-      managePatternsUrl: canUser('create', 'templates') ? (0,external_wp_url_namespaceObject.addQueryArgs)('site-editor.php', {
+      managePatternsUrl: canUser('create', {
+        kind: 'postType',
+        name: 'wp_template'
+      }) ? (0,external_wp_url_namespaceObject.addQueryArgs)('site-editor.php', {
         path: '/patterns'
       }) : (0,external_wp_url_namespaceObject.addQueryArgs)('edit.php', {
         post_type: 'wp_block'
@@ -1067,7 +1083,7 @@ function PatternsManageButton({
 }
 /* harmony default export */ const patterns_manage_button = (PatternsManageButton);
 
-;// CONCATENATED MODULE: ./node_modules/@wordpress/patterns/build-module/components/index.js
+;// ./node_modules/@wordpress/patterns/build-module/components/index.js
 /**
  * WordPress dependencies
  */
@@ -1100,9 +1116,9 @@ function PatternsMenuItems({
   });
 }
 
-;// CONCATENATED MODULE: external ["wp","a11y"]
+;// external ["wp","a11y"]
 const external_wp_a11y_namespaceObject = window["wp"]["a11y"];
-;// CONCATENATED MODULE: ./node_modules/@wordpress/patterns/build-module/components/rename-pattern-category-modal.js
+;// ./node_modules/@wordpress/patterns/build-module/components/rename-pattern-category-modal.js
 /**
  * WordPress dependencies
  */
@@ -1253,7 +1269,7 @@ function RenamePatternCategoryModal({
   });
 }
 
-;// CONCATENATED MODULE: ./node_modules/@wordpress/patterns/build-module/components/allow-overrides-modal.js
+;// ./node_modules/@wordpress/patterns/build-module/components/allow-overrides-modal.js
 /**
  * WordPress dependencies
  */
@@ -1375,7 +1391,7 @@ function DisallowOverridesModal({
   });
 }
 
-;// CONCATENATED MODULE: ./node_modules/@wordpress/patterns/build-module/components/pattern-overrides-controls.js
+;// ./node_modules/@wordpress/patterns/build-module/components/pattern-overrides-controls.js
 /**
  * WordPress dependencies
  */
@@ -1392,24 +1408,6 @@ function DisallowOverridesModal({
 
 
 
-function removeBindings(bindings) {
-  let updatedBindings = {
-    ...bindings
-  };
-  delete updatedBindings.__default;
-  if (!Object.keys(updatedBindings).length) {
-    updatedBindings = undefined;
-  }
-  return updatedBindings;
-}
-function addBindings(bindings) {
-  return {
-    ...bindings,
-    __default: {
-      source: PATTERN_OVERRIDES_BINDING_SOURCE
-    }
-  };
-}
 function PatternOverridesControls({
   attributes,
   setAttributes,
@@ -1422,18 +1420,22 @@ function PatternOverridesControls({
   const defaultBindings = attributes.metadata?.bindings?.__default;
   const hasOverrides = hasName && defaultBindings?.source === PATTERN_OVERRIDES_BINDING_SOURCE;
   const isConnectedToOtherSources = defaultBindings?.source && defaultBindings.source !== PATTERN_OVERRIDES_BINDING_SOURCE;
+  const {
+    updateBlockBindings
+  } = (0,external_wp_blockEditor_namespaceObject.useBlockBindingsUtils)();
   function updateBindings(isChecked, customName) {
-    const prevBindings = attributes?.metadata?.bindings;
-    const updatedBindings = isChecked ? addBindings(prevBindings) : removeBindings(prevBindings);
-    const updatedMetadata = {
-      ...attributes.metadata,
-      bindings: updatedBindings
-    };
     if (customName) {
-      updatedMetadata.name = customName;
+      setAttributes({
+        metadata: {
+          ...attributes.metadata,
+          name: customName
+        }
+      });
     }
-    setAttributes({
-      metadata: updatedMetadata
+    updateBlockBindings({
+      __default: isChecked ? {
+        source: PATTERN_OVERRIDES_BINDING_SOURCE
+      } : undefined
     });
   }
 
@@ -1447,6 +1449,7 @@ function PatternOverridesControls({
     children: [/*#__PURE__*/(0,external_ReactJSXRuntime_namespaceObject.jsx)(external_wp_blockEditor_namespaceObject.InspectorControls, {
       group: "advanced",
       children: /*#__PURE__*/(0,external_ReactJSXRuntime_namespaceObject.jsx)(external_wp_components_namespaceObject.BaseControl, {
+        __nextHasNoMarginBottom: true,
         id: controlId,
         label: (0,external_wp_i18n_namespaceObject.__)('Overrides'),
         help: helpText,
@@ -1463,7 +1466,7 @@ function PatternOverridesControls({
             }
           },
           disabled: !hasOverrides && hasUnsupportedImageAttributes,
-          __experimentalIsFocusable: true,
+          accessibleWhenDisabled: true,
           children: hasOverrides ? (0,external_wp_i18n_namespaceObject.__)('Disable overrides') : (0,external_wp_i18n_namespaceObject.__)('Enable overrides')
         })
       })
@@ -1481,7 +1484,7 @@ function PatternOverridesControls({
 }
 /* harmony default export */ const pattern_overrides_controls = (PatternOverridesControls);
 
-;// CONCATENATED MODULE: ./node_modules/@wordpress/patterns/build-module/components/reset-overrides-control.js
+;// ./node_modules/@wordpress/patterns/build-module/components/reset-overrides-control.js
 /**
  * WordPress dependencies
  */
@@ -1546,14 +1549,13 @@ function ResetOverridesControl(props) {
       children: /*#__PURE__*/(0,external_ReactJSXRuntime_namespaceObject.jsx)(external_wp_components_namespaceObject.ToolbarButton, {
         onClick: onClick,
         disabled: !isOverriden,
-        __experimentalIsFocusable: true,
         children: (0,external_wp_i18n_namespaceObject.__)('Reset')
       })
     })
   });
 }
 
-;// CONCATENATED MODULE: ./node_modules/@wordpress/icons/build-module/library/copy.js
+;// ./node_modules/@wordpress/icons/build-module/library/copy.js
 /**
  * WordPress dependencies
  */
@@ -1570,7 +1572,7 @@ const copy = /*#__PURE__*/(0,external_ReactJSXRuntime_namespaceObject.jsx)(exter
 });
 /* harmony default export */ const library_copy = (copy);
 
-;// CONCATENATED MODULE: ./node_modules/@wordpress/patterns/build-module/components/pattern-overrides-block-controls.js
+;// ./node_modules/@wordpress/patterns/build-module/components/pattern-overrides-block-controls.js
 /**
  * WordPress dependencies
  */
@@ -1631,7 +1633,7 @@ function PatternOverridesToolbarIndicator({
     clientId: clientIds[0],
     maximumLength: 35
   });
-  const blockDescription = isSingleBlockSelected ? (0,external_wp_i18n_namespaceObject.sprintf)( /* translators: %1s: The block type's name; %2s: The block's user-provided name (the same as the override name). */
+  const blockDescription = isSingleBlockSelected ? (0,external_wp_i18n_namespaceObject.sprintf)( /* translators: 1: The block type's name. 2: The block's user-provided name (the same as the override name). */
   (0,external_wp_i18n_namespaceObject.__)('This %1$s is editable using the "%2$s" override.'), firstBlockTitle.toLowerCase(), firstBlockName) : (0,external_wp_i18n_namespaceObject.__)('These blocks are editable using overrides.');
   const descriptionId = (0,external_wp_element_namespaceObject.useId)();
   return /*#__PURE__*/(0,external_ReactJSXRuntime_namespaceObject.jsx)(external_wp_components_namespaceObject.ToolbarItem, {
@@ -1650,7 +1652,7 @@ function PatternOverridesToolbarIndicator({
         })
       }),
       toggleProps: {
-        describedBy: blockDescription,
+        description: blockDescription,
         ...toggleProps
       },
       menuProps: {
@@ -1695,7 +1697,7 @@ function PatternOverridesBlockControls() {
   }) : null;
 }
 
-;// CONCATENATED MODULE: ./node_modules/@wordpress/patterns/build-module/private-apis.js
+;// ./node_modules/@wordpress/patterns/build-module/private-apis.js
 /**
  * Internal dependencies
  */
@@ -1736,7 +1738,7 @@ lock(privateApis, {
   PARTIAL_SYNCING_SUPPORTED_BLOCKS: PARTIAL_SYNCING_SUPPORTED_BLOCKS
 });
 
-;// CONCATENATED MODULE: ./node_modules/@wordpress/patterns/build-module/index.js
+;// ./node_modules/@wordpress/patterns/build-module/index.js
 /**
  * Internal dependencies
  */

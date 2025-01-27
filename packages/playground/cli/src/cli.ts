@@ -10,7 +10,7 @@ import {
 	SupportedPHPVersion,
 	SupportedPHPVersions,
 } from '@php-wasm/universal';
-import { logger } from '@php-wasm/logger';
+import { logger, errorLogPath } from '@php-wasm/logger';
 import {
 	Blueprint,
 	compileBlueprint,
@@ -24,12 +24,11 @@ import { bootWordPress } from '@wp-playground/wordpress';
 import { rootCertificates } from 'tls';
 import {
 	CACHE_FOLDER,
+	cachedDownload,
 	fetchSqliteIntegration,
-	fetchWordPress,
 	readAsFile,
-	resolveWPRelease,
 } from './download';
-
+import { resolveWordPressRelease } from '@wp-playground/wordpress';
 export interface Mount {
 	hostPath: string;
 	vfsPath: string;
@@ -102,6 +101,12 @@ async function run() {
 			type: 'boolean',
 			default: false,
 		})
+		.option('debug', {
+			describe:
+				'Print PHP error log content if an error occurs during Playground boot.',
+			type: 'boolean',
+			default: false,
+		})
 		.showHelpOnFail(false)
 		.check((args) => {
 			if (args.wp !== undefined && !isValidWordPressSlug(args.wp)) {
@@ -152,7 +157,7 @@ async function run() {
 			await requestHandler.processManager.acquirePHPInstance();
 		try {
 			await php.run({
-				code: `<?php 
+				code: `<?php
 				$zip = new ZipArchive();
 				if(false === $zip->open('/tmp/build.zip', ZipArchive::CREATE | ZipArchive::OVERWRITE)) {
 					throw new Exception('Failed to create ZIP');
@@ -168,7 +173,7 @@ async function run() {
 					$zip->addFile($file->getPathname(), $file->getPathname());
 				}
 				$zip->close();
-				
+
 			`,
 			});
 			const zip = php.readFileAsBuffer('/tmp/build.zip');
@@ -224,6 +229,8 @@ async function run() {
 			}
 			lastCaption =
 				e.detail.caption || lastCaption || 'Running the Blueprint';
+			process.stdout.clearLine(0);
+			process.stdout.cursorTo(0);
 			process.stdout.write(
 				'\r\x1b[K' + `${lastCaption.trim()} – ${e.detail.progress}%`
 			);
@@ -269,25 +276,44 @@ async function run() {
 						Math.min(100, (100 * e.detail.loaded) / e.detail.total)
 					);
 					if (!args.quiet) {
+						process.stdout.clearLine(0);
+						process.stdout.cursorTo(0);
 						process.stdout.write(
-							`\rDownloading WordPress ${percentProgress}%...    `
+							`Downloading WordPress ${percentProgress}%...`
 						);
 					}
 				}) as any);
 
-				wpDetails = await resolveWPRelease(args.wp);
+				wpDetails = await resolveWordPressRelease(args.wp);
 			}
-
-			const preinstalledWpContentPath = path.join(
-				CACHE_FOLDER,
-				`prebuilt-wp-content-for-wp-${wpDetails.version}.zip`
+			logger.log(
+				`Resolved WordPress release URL: ${wpDetails?.releaseUrl}`
 			);
+
+			const preinstalledWpContentPath =
+				wpDetails &&
+				path.join(
+					CACHE_FOLDER,
+					`prebuilt-wp-content-for-wp-${wpDetails.version}.zip`
+				);
 			const wordPressZip = !wpDetails
 				? undefined
 				: fs.existsSync(preinstalledWpContentPath)
 				? readAsFile(preinstalledWpContentPath)
-				: fetchWordPress(wpDetails.url, monitor);
+				: await cachedDownload(
+						wpDetails.releaseUrl,
+						`${wpDetails.version}.zip`,
+						monitor
+				  );
 
+			const constants: Record<string, string | number | boolean | null> =
+				{
+					WP_DEBUG: true,
+					WP_DEBUG_LOG: true,
+					WP_DEBUG_DISPLAY: false,
+				};
+
+			logger.log(`Booting WordPress...`);
 			requestHandler = await bootWordPress({
 				siteUrl: absoluteUrl,
 				createPhpRuntime: async () =>
@@ -299,6 +325,7 @@ async function run() {
 					'/internal/shared/ca-bundle.crt':
 						rootCertificates.join('\n'),
 				},
+				constants,
 				phpIniEntries: {
 					'openssl.cafile': '/internal/shared/ca-bundle.crt',
 					allow_url_fopen: '1',
@@ -312,42 +339,59 @@ async function run() {
 					},
 				},
 			});
+			logger.log(`Booted!`);
 
 			const php = await requestHandler.getPrimaryPhp();
-			if (wpDetails && !args.mountBeforeInstall) {
-				fs.writeFileSync(
-					preinstalledWpContentPath,
-					await zipDirectory(php, '/wordpress')
-				);
-			}
-
-			if (args.mount) {
-				mountResources(php, args.mount);
-			}
-
-			wordPressReady = true;
-
-			if (compiledBlueprint) {
-				const { php, reap } =
-					await requestHandler.processManager.acquirePHPInstance();
-				try {
-					logger.log(`Running the Blueprint...`);
-					await runBlueprintSteps(compiledBlueprint, php);
-					logger.log(`Finished running the blueprint`);
-				} finally {
-					reap();
+			try {
+				if (
+					wpDetails &&
+					!args.mountBeforeInstall &&
+					!fs.existsSync(preinstalledWpContentPath)
+				) {
+					logger.log(
+						`Caching preinstalled WordPress for the next boot...`
+					);
+					fs.writeFileSync(
+						preinstalledWpContentPath,
+						await zipDirectory(php, '/wordpress')
+					);
+					logger.log(`Cached!`);
 				}
-			}
 
-			if (command === 'build-snapshot') {
-				await zipSite(args.outfile as string);
-				logger.log(`WordPress exported to ${args.outfile}`);
-				process.exit(0);
-			} else if (command === 'run-blueprint') {
-				logger.log(`Blueprint executed`);
-				process.exit(0);
-			} else {
-				logger.log(`WordPress is running on ${absoluteUrl}`);
+				if (args.mount) {
+					mountResources(php, args.mount);
+				}
+
+				wordPressReady = true;
+
+				if (compiledBlueprint) {
+					const { php, reap } =
+						await requestHandler.processManager.acquirePHPInstance();
+					try {
+						logger.log(`Running the Blueprint...`);
+						await runBlueprintSteps(compiledBlueprint, php);
+						logger.log(`Finished running the blueprint`);
+					} finally {
+						reap();
+					}
+				}
+
+				if (command === 'build-snapshot') {
+					await zipSite(args.outfile as string);
+					logger.log(`WordPress exported to ${args.outfile}`);
+					process.exit(0);
+				} else if (command === 'run-blueprint') {
+					logger.log(`Blueprint executed`);
+					process.exit(0);
+				} else {
+					logger.log(`WordPress is running on ${absoluteUrl}`);
+				}
+			} catch (error) {
+				if (!args.debug) {
+					throw error;
+				}
+				const phpLogs = php.readFileAsText(errorLogPath);
+				throw new Error(phpLogs, { cause: error });
 			}
 		},
 		async handleRequest(request: PHPRequest) {

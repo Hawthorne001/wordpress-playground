@@ -22,9 +22,8 @@ export {
 	SupportedPHPVersionsList,
 	LatestSupportedPHPVersion,
 } from '@php-wasm/universal';
-export type { PlaygroundClient, MountDescriptor } from '@wp-playground/remote';
-
 export { phpVar, phpVars } from '@php-wasm/util';
+export type { PlaygroundClient, MountDescriptor };
 
 import {
 	Blueprint,
@@ -66,9 +65,27 @@ export interface StartPlaygroundOptions {
 	 * @returns
 	 */
 	onBeforeBlueprint?: () => Promise<void>;
-	siteSlug?: string;
 	mounts?: Array<MountDescriptor>;
 	shouldInstallWordPress?: boolean;
+	/**
+	 * The string prefix used in the site URL served by the currently
+	 * running remote.html. E.g. for a prefix like `/scope:playground/`,
+	 * the scope would be `playground`. See the `@php-wasm/scopes` package
+	 * for more details.
+	 */
+	scope?: string;
+	/**
+	 * Proxy URL to use for cross-origin requests.
+	 *
+	 * For example, if corsProxy is set to "https://cors.wordpress.net/proxy.php",
+	 * then the CORS requests to https://github.com/WordPress/wordpress-playground.git would actually
+	 * be made to https://cors.wordpress.net/proxy.php?https://github.com/WordPress/wordpress-playground.git.
+	 *
+	 * The Blueprints library will arbitrarily choose which requests to proxy. If you need
+	 * to proxy every single request, do not use this option. Instead, you should preprocess
+	 * your Blueprint to replace all cross-origin URLs with the proxy URL.
+	 */
+	corsProxy?: string;
 }
 
 /**
@@ -89,6 +106,8 @@ export async function startPlaygroundWeb({
 	sapiName,
 	onBeforeBlueprint,
 	mounts,
+	scope,
+	corsProxy,
 	shouldInstallWordPress,
 }: StartPlaygroundOptions): Promise<PlaygroundClient> {
 	assertValidRemote(remoteUrl);
@@ -101,14 +120,13 @@ export async function startPlaygroundWeb({
 
 	// Set a default blueprint if none is provided.
 	if (!blueprint) {
-		blueprint = {
-			phpExtensionBundles: ['kitchen-sink'],
-		};
+		blueprint = {};
 	}
 
 	const compiled = compileBlueprint(blueprint, {
 		progress: progressTracker.stage(0.5),
 		onStepCompleted: onBlueprintStepCompleted,
+		corsProxy,
 	});
 
 	await new Promise((resolve) => {
@@ -129,11 +147,12 @@ export async function startPlaygroundWeb({
 	await playground.boot({
 		mounts,
 		sapiName,
+		scope: scope ?? Math.random().toFixed(16),
 		shouldInstallWordPress,
 		phpVersion: compiled.versions.php,
 		wpVersion: compiled.versions.wp,
-		phpExtensions: compiled.phpExtensions,
 		withNetworking: compiled.features.networking,
+		corsProxyUrl: corsProxy,
 	});
 	await playground.isReady();
 	downloadPHPandWP.finish();

@@ -15,7 +15,6 @@ Blueprints are JSON files for setting up your very own WordPress Playground inst
 		"php": "8.0",
 		"wp": "latest"
 	},
-	"phpExtensionBundles": ["kitchen-sink"],
 	"steps": [
 		{
 			"step": "login",
@@ -28,9 +27,9 @@ Blueprints are JSON files for setting up your very own WordPress Playground inst
 
 There are three ways to use Blueprints:
 
--   [Paste a Blueprint into the URL "fragment" on WordPress Playground website](./02-using-blueprints.md#url-fragment).
--   [Use them with the JavaScript API](./02-using-blueprints.md#javascript-api).
--   [Reference a blueprint JSON file via QueryParam blueprint-url](../developers/apis/query-api/)
+-   [Paste a Blueprint into the URL "fragment" on WordPress Playground website](/blueprints/using-blueprints#url-fragment).
+-   [Use them with the JavaScript API](/blueprints/using-blueprints#javascript-api).
+-   [Reference a blueprint JSON file via QueryParam blueprint-url](/developers/apis/query-api/)
 
 ## What problems are solved by Blueprints?
 
@@ -56,7 +55,7 @@ Because Blueprints can be pasted in the URL, you can embed or link to a Playgrou
 	"steps": [
         {
             "step": "installTheme",
-            "themeZipFile": {
+            "themeData": {
                 "resource": "wordpress.org/themes",
             	"slug": "pendant"
             },

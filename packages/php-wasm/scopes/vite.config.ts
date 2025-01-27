@@ -16,6 +16,7 @@ export default defineConfig({
 		dts({
 			entryRoot: 'src',
 			tsconfigPath: join(__dirname, 'tsconfig.lib.json'),
+			pathsToAliases: false,
 		}),
 
 		viteTsConfigPaths({
@@ -31,8 +32,9 @@ export default defineConfig({
 			entry: 'src/index.ts',
 			name: 'php-wasm-scope',
 			fileName: 'index',
-			formats: ['es'],
+			formats: ['es', 'cjs'],
 		},
+		sourcemap: true,
 		rollupOptions: {
 			// External packages that should not be bundled into your library.
 			external: getExternalModules(),

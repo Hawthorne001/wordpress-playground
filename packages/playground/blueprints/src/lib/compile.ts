@@ -2,19 +2,18 @@ import { ProgressTracker } from '@php-wasm/progress';
 import { Semaphore } from '@php-wasm/util';
 import {
 	LatestSupportedPHPVersion,
-	SupportedPHPExtension,
-	SupportedPHPExtensionsList,
-	SupportedPHPExtensionBundles,
 	SupportedPHPVersion,
 	SupportedPHPVersions,
 	UniversalPHP,
 } from '@php-wasm/universal';
-import type { SupportedPHPExtensionBundle } from '@php-wasm/universal';
-import { FileReference, isFileReference, Resource } from './resources';
-import { Step, StepDefinition, WriteFileStep } from './steps';
+import { FileReference, isResourceReference, Resource } from './resources';
+import { ImportWxrStep, Step, StepDefinition, WriteFileStep } from './steps';
 import * as allStepHandlers from './steps/handlers';
 import { Blueprint, ExtraLibrary } from './blueprint';
 import { logger } from '@php-wasm/logger';
+/* @ts-ignore */
+// eslint-disable-next-line
+import dataLiberationCoreUrl from '../../../data-liberation/dist/data-liberation-core.phar.gz?url';
 
 // @TODO: Configure this in the `wp-cli` step, not here.
 const { wpCLI, ...otherStepHandlers } = allStepHandlers;
@@ -38,6 +37,7 @@ const keyedStepHandlers = {
  * watching for changes.
  */
 import blueprintValidator from '../../public/blueprint-schema-validator';
+import { defaultWpCliPath, defaultWpCliResource } from './steps/wp-cli';
 
 export type CompiledStep = (php: UniversalPHP) => Promise<void> | void;
 
@@ -47,8 +47,6 @@ export interface CompiledBlueprint {
 		php: SupportedPHPVersion;
 		wp: string;
 	};
-	/** The requested PHP extensions to load */
-	phpExtensions: SupportedPHPExtension[];
 	features: {
 		/** Should boot with support for network request via wp_safe_remote_get? */
 		networking: boolean;
@@ -67,6 +65,14 @@ export interface CompileBlueprintOptions {
 	semaphore?: Semaphore;
 	/** Optional callback with step output */
 	onStepCompleted?: OnStepCompleted;
+	/**
+	 * Proxy URL to use for cross-origin requests.
+	 *
+	 * For example, if corsProxy is set to "https://cors.wordpress.net/proxy.php",
+	 * then the CORS requests to https://github.com/WordPress/gutenberg.git would actually
+	 * be made to https://cors.wordpress.net/proxy.php?https://github.com/WordPress/gutenberg.git.
+	 */
+	corsProxy?: string;
 }
 
 /**
@@ -83,20 +89,43 @@ export function compileBlueprint(
 		progress = new ProgressTracker(),
 		semaphore = new Semaphore({ concurrency: 3 }),
 		onStepCompleted = () => {},
+		corsProxy,
 	}: CompileBlueprintOptions = {}
 ): CompiledBlueprint {
+	// Deep clone the blueprint to avoid mutating the input
+	blueprint = structuredClone(blueprint);
+
 	blueprint = {
 		...blueprint,
 		steps: (blueprint.steps || [])
 			.filter(isStepDefinition)
 			.filter(isStepStillSupported),
 	};
-	// Convert legacy importFile steps to importWxr
 	for (const step of blueprint.steps!) {
-		if (typeof step === 'object' && (step as any).step === 'importFile') {
+		if (!step || typeof step !== 'object') {
+			continue;
+		}
+		// Convert legacy importFile steps to importWxr
+		if ((step as any).step === 'importFile') {
 			(step as any).step = 'importWxr';
 			logger.warn(
 				`The "importFile" step is deprecated. Use "importWxr" instead.`
+			);
+		} else if (
+			(step as any)?.step === 'installPlugin' &&
+			'pluginZipFile' in step
+		) {
+			(step as any).pluginData = (step as any).pluginZipFile;
+			logger.warn(
+				`The "pluginZipFile" option of the "installPlugin" step is deprecated. Use "pluginData" instead.`
+			);
+		} else if (
+			(step as any)?.step === 'installTheme' &&
+			'themeZipFile' in step
+		) {
+			(step as any).themeData = (step as any).themeZipFile;
+			logger.warn(
+				`The "themeZipFile" option of the "installTheme" step is deprecated. Use "themeData" instead.`
 			);
 		}
 	}
@@ -136,7 +165,7 @@ export function compileBlueprint(
 			})
 			.map((resource) => ({
 				step: 'installPlugin',
-				pluginZipFile: resource,
+				pluginData: resource,
 			})) as StepDefinition[];
 		blueprint.steps!.unshift(...steps);
 	}
@@ -144,63 +173,36 @@ export function compileBlueprint(
 		blueprint.steps!.push({
 			step: 'login',
 			...(blueprint.login === true
-				? { username: 'admin', password: 'password' }
+				? { username: 'admin' }
 				: blueprint.login),
 		});
-	}
-	if (!blueprint.phpExtensionBundles) {
-		blueprint.phpExtensionBundles = [];
-	}
-
-	if (!blueprint.phpExtensionBundles) {
-		blueprint.phpExtensionBundles = [];
-	}
-	// Default to the "kitchen sink" PHP extensions bundle if no
-	// other bundles are specified.
-	if (blueprint.phpExtensionBundles.length === 0) {
-		blueprint.phpExtensionBundles.push('kitchen-sink');
 	}
 
 	/**
 	 * Download WP-CLI. {{{
 	 * Hardcoding this in the compile() function is a temporary solution
-	 * to provide the wpCLI step with the wp-cli.phar file it needs. Eventually,
+	 * to provide steps with the wp-cli.phar file it needs. Eventually,
 	 * each Blueprint step may be able to specify any pre-requisite resources.
 	 * Also, wp-cli should only be downloaded if it's not already present.
+	 *
+	 * The enableMultisite step uses wp-cli to convert the site to a multisite.
+	 * The wp-cli step itself depends on WP-CLI.
 	 */
-	const wpCliStepIndex =
+	const indexOfStepThatDependsOnWpCli =
 		blueprint.steps?.findIndex(
-			(step) => typeof step === 'object' && step?.step === 'wp-cli'
+			(step) =>
+				typeof step === 'object' &&
+				step?.step &&
+				['wp-cli', 'enableMultisite'].includes(step.step)
 		) ?? -1;
-	if (blueprint?.extraLibraries?.includes('wp-cli') || wpCliStepIndex > -1) {
-		if (blueprint.phpExtensionBundles.includes('light')) {
-			blueprint.phpExtensionBundles =
-				blueprint.phpExtensionBundles.filter(
-					(bundle) => bundle !== 'light'
-				);
-			logger.warn(
-				`WP-CLI is used in your Blueprint, and it requires the iconv and mbstring PHP extensions. ` +
-					`However, you did not specify the kitchen-sink extension bundle. Playground will override your ` +
-					`choice and load the kitchen-sink PHP extensions bundle to prevent the WP-CLI step from failing. `
-			);
-		}
+	if (
+		blueprint?.extraLibraries?.includes('wp-cli') ||
+		indexOfStepThatDependsOnWpCli !== -1
+	) {
 		const wpCliInstallStep: WriteFileStep<FileReference> = {
 			step: 'writeFile',
-			data: {
-				resource: 'url',
-				/**
-				 * Use compression for downloading the wp-cli.phar file.
-				 * The official release, hosted at raw.githubusercontent.com, is ~7MB
-				 * and the transfer is uncompressed. playground.wordpress.net supports
-				 * transfer compression and only transmits ~1.4MB.
-				 *
-				 * @TODO: minify the wp-cli.phar file. It can be as small as 1MB when all the
-				 *        whitespaces and are removed, and even 500KB when libraries
-				 *        like the JavaScript parser or Composer are removed.
-				 */
-				url: 'https://playground.wordpress.net/wp-cli.phar',
-			},
-			path: '/tmp/wp-cli.phar',
+			data: defaultWpCliResource,
+			path: defaultWpCliPath,
 		};
 		/**
 		 * If the blueprint does not have a wp-cli step,
@@ -210,10 +212,14 @@ export function compileBlueprint(
 		 * If the blueprint has wp-cli steps,
 		 * we need to install wp-cli before running these steps.
 		 */
-		if (wpCliStepIndex === -1) {
+		if (indexOfStepThatDependsOnWpCli === -1) {
 			blueprint.steps?.push(wpCliInstallStep);
 		} else {
-			blueprint.steps?.splice(wpCliStepIndex, 0, wpCliInstallStep);
+			blueprint.steps?.splice(
+				indexOfStepThatDependsOnWpCli,
+				0,
+				wpCliInstallStep
+			);
 		}
 	}
 
@@ -225,25 +231,29 @@ export function compileBlueprint(
 		(step) => typeof step === 'object' && step?.step === 'importWxr'
 	);
 	if (importWxrStepIndex !== undefined && importWxrStepIndex > -1) {
-		if (blueprint.phpExtensionBundles.includes('light')) {
-			blueprint.phpExtensionBundles =
-				blueprint.phpExtensionBundles.filter(
-					(bundle) => bundle !== 'light'
-				);
-			logger.warn(
-				`The importWxr step used in your Blueprint requires the iconv and mbstring PHP extensions. ` +
-					`However, you did not specify the kitchen-sink extension bundle. Playground will override your ` +
-					`choice and load the kitchen-sink PHP extensions bundle to prevent the WP-CLI step from failing. `
-			);
+		const importWxrStep = blueprint.steps![
+			importWxrStepIndex
+		]! as ImportWxrStep<any>;
+		if (importWxrStep.importer === 'data-liberation') {
+			blueprint.steps?.splice(importWxrStepIndex, 0, {
+				step: 'writeFile',
+				path: '/internal/shared/data-liberation-core.phar',
+				data: {
+					resource: 'url',
+					url: dataLiberationCoreUrl,
+					caption: 'Downloading the Data Liberation WXR importer',
+				},
+			});
+		} else {
+			blueprint.steps?.splice(importWxrStepIndex, 0, {
+				step: 'installPlugin',
+				pluginData: {
+					resource: 'url',
+					url: 'https://playground.wordpress.net/wordpress-importer.zip',
+					caption: 'Downloading the WordPress Importer plugin',
+				},
+			});
 		}
-		blueprint.steps?.splice(importWxrStepIndex, 0, {
-			step: 'installPlugin',
-			pluginZipFile: {
-				resource: 'url',
-				url: 'https://playground.wordpress.net/wordpress-importer.zip',
-				caption: 'Downloading the WordPress Importer plugin',
-			},
-		});
 	}
 
 	const { valid, errors } = validateBlueprint(blueprint);
@@ -268,6 +278,7 @@ export function compileBlueprint(
 			semaphore,
 			rootProgressTracker: progress,
 			totalProgressWeight,
+			corsProxy,
 		})
 	);
 
@@ -280,10 +291,6 @@ export function compileBlueprint(
 			),
 			wp: blueprint.preferredVersions?.wp || 'latest',
 		},
-		phpExtensions: compilePHPExtensions(
-			[],
-			blueprint.phpExtensionBundles || []
-		),
 		features: {
 			// Disable networking by default
 			networking: blueprint.features?.networking ?? false,
@@ -393,31 +400,6 @@ function compileVersion<T>(
 }
 
 /**
- * Compiles a list of requested PHP extensions provided as strings
- * into a valid list of supported PHP extensions.
- *
- * @param requestedExtensions The extensions to compile
- * @returns The compiled extensions
- */
-function compilePHPExtensions(
-	requestedExtensions: string[],
-	requestedBundles: string[]
-): SupportedPHPExtension[] {
-	const extensions = SupportedPHPExtensionsList.filter((extension) =>
-		requestedExtensions.includes(extension)
-	) as SupportedPHPExtension[];
-	const extensionsFromBundles = requestedBundles.flatMap((bundle) =>
-		bundle in SupportedPHPExtensionBundles
-			? SupportedPHPExtensionBundles[
-					bundle as SupportedPHPExtensionBundle
-			  ]
-			: []
-	) as SupportedPHPExtension[];
-	// Deduplicate
-	return Array.from(new Set([...extensions, ...extensionsFromBundles]));
-}
-
-/**
  * Determines if a step is a StepDefinition object
  *
  * @param step The object to test
@@ -455,6 +437,12 @@ interface CompileStepArgsOptions {
 	rootProgressTracker: ProgressTracker;
 	/** The total progress weight of all the steps in the blueprint */
 	totalProgressWeight: number;
+	/**
+	 * Proxy URL to use for cross-origin requests.
+	 *
+	 * @see CompileBlueprintOptions.corsProxy
+	 */
+	corsProxy?: string;
 }
 
 /**
@@ -471,8 +459,9 @@ function compileStep<S extends StepDefinition>(
 		semaphore,
 		rootProgressTracker,
 		totalProgressWeight,
+		corsProxy,
 	}: CompileStepArgsOptions
-): { run: CompiledStep; step: S; resources: Array<Resource> } {
+): { run: CompiledStep; step: S; resources: Array<Resource<any>> } {
 	const stepProgress = rootProgressTracker.stage(
 		(step.progress?.weight || 1) / totalProgressWeight
 	);
@@ -480,9 +469,10 @@ function compileStep<S extends StepDefinition>(
 	const args: any = {};
 	for (const key of Object.keys(step)) {
 		let value = (step as any)[key];
-		if (isFileReference(value)) {
+		if (isResourceReference(value)) {
 			value = Resource.create(value, {
 				semaphore,
+				corsProxy,
 			});
 		}
 		args[key] = value;
@@ -528,7 +518,7 @@ function compileStep<S extends StepDefinition>(
  * @returns The resources used by the compiled step
  */
 function getResources<S extends StepDefinition>(args: S) {
-	const result: Resource[] = [];
+	const result: Resource<any>[] = [];
 	for (const argName in args) {
 		const resourceMaybe = (args as any)[argName];
 		if (resourceMaybe instanceof Resource) {

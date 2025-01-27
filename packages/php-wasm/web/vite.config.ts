@@ -19,6 +19,7 @@ export default defineConfig(({ command }) => {
 			dts({
 				entryRoot: 'src',
 				tsconfigPath: join(__dirname, 'tsconfig.lib.json'),
+				pathsToAliases: false,
 			}),
 			{
 				name: 'ignore-wasm-imports',
@@ -56,14 +57,14 @@ export default defineConfig(({ command }) => {
 					) {
 						/**
 						 * The ../ is weird but necessary to make the final build say
-						 * import("./php_8_2.js")
+						 * import("./php/jspi/php_8_2.js")
 						 * and not
-						 * import("php_8_2.js")
+						 * import("php/jspi/php_8_2.js")
 						 *
-						 * The slice(-2) will ensure the 'kitchen-sink' or 'light'
+						 * The slice(-3) will ensure the 'php/jspi/`
 						 * portion of the path is preserved.
 						 */
-						return '../' + specifier.split('/').slice(-2).join('/');
+						return '../' + specifier.split('/').slice(-3).join('/');
 					}
 				},
 			},
@@ -79,6 +80,7 @@ export default defineConfig(({ command }) => {
 				fileName: 'index',
 				formats: ['es'],
 			},
+			sourcemap: true,
 			rollupOptions: {
 				// Don't bundle the PHP loaders in the final build. See
 				// the preserve-php-loaders-imports plugin above.
@@ -95,7 +97,7 @@ export default defineConfig(({ command }) => {
 			cache: {
 				dir: '../../../node_modules/.vitest',
 			},
-			environment: 'jsdom',
+			environment: 'node',
 			include: ['src/**/*.{test,spec}.{js,mjs,cjs,ts,mts,cts,jsx,tsx}'],
 		},
 	};

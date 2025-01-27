@@ -18,6 +18,7 @@ export default defineConfig({
 		dts({
 			entryRoot: 'src',
 			tsconfigPath: path('tsconfig.lib.json'),
+			pathsToAliases: false,
 		}),
 		{
 			name: 'use-correct-wp-data-file-url-in-vitest-environment',
@@ -48,6 +49,7 @@ export default defineConfig({
 		//            in the app mode.
 		// @see https://github.com/vitejs/vite/issues/3295
 		assetsInlineLimit: 0,
+		sourcemap: true,
 		rollupOptions: {
 			input: path('src/index.ts'),
 			external: getExternalModules(),

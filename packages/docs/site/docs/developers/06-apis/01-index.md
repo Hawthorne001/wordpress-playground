@@ -47,7 +47,7 @@ display={`{
     },
     {
       "step": "installPlugin",
-      "pluginZipFile": {
+      "pluginData": {
         "resource": "wordpress.org/plugins",
         "slug": "friends"
       }
@@ -65,7 +65,7 @@ blueprint={{
             },
             {
             step: 'installPlugin',
-                pluginZipFile: {
+                pluginData: {
                     resource: 'wordpress.org/plugins',
                     slug: 'friends',
                 },
@@ -89,7 +89,7 @@ wp_insert_post(array(
 
 :::info
 
-Blueprints play a significant role in WordPress Playground, so they have their own dedicated documentation hub. Learn more about JSON Blueprints at the [Blueprints Docs Hub](../../blueprints/intro.md).
+Blueprints play a significant role in WordPress Playground, so they have their own dedicated documentation hub. Learn more about JSON Blueprints at the [Blueprints Docs Hub](/blueprints).
 
 :::
 

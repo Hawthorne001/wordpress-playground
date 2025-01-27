@@ -895,13 +895,45 @@ describe.each(SupportedPHPVersions)('PHP %s', (phpVersion) => {
 					__dirname + '/test-data/mount-contents'
 				)
 			);
-			php.mv('/nodefs/a', '/tmp/a');
+			php.mkdir('/nodefs/tmp-dir-for-mv-test');
 			expect(
-				existsSync(__dirname + '/test-data/mount-contents/a')
+				existsSync(
+					__dirname + '/test-data/mount-contents/tmp-dir-for-mv-test'
+				)
+			).toEqual(true);
+
+			php.writeFile('/nodefs/tmp-dir-for-mv-test/test.txt', 'contents');
+			php.mv('/nodefs/tmp-dir-for-mv-test', '/tmp/tmp-dir-for-mv-test');
+			expect(
+				existsSync(
+					__dirname + '/test-data/mount-contents/tmp-dir-for-mv-test'
+				)
 			).toEqual(false);
-			expect(php.fileExists('/nodefs/a')).toEqual(false);
-			expect(php.fileExists('/tmp/a')).toEqual(true);
-			expect(php.readFileAsText('/tmp/a/b/test.txt')).toEqual('contents');
+			expect(php.fileExists('/nodefs/tmp-dir-for-mv-test')).toEqual(
+				false
+			);
+			expect(php.fileExists('/tmp/tmp-dir-for-mv-test')).toEqual(true);
+			expect(
+				php.readFileAsText('/tmp/tmp-dir-for-mv-test/test.txt')
+			).toEqual('contents');
+		});
+
+		it('mv() from MEMFS to NODEFS should work', () => {
+			php.mkdir('/nodefs');
+			php.mount(
+				'/nodefs',
+				createNodeFsMountHandler(
+					__dirname + '/test-data/mount-contents'
+				)
+			);
+
+			php.writeFile('/nodefs/tmp-file-for-mv-test.txt', 'contents');
+			php.mv('/nodefs/tmp-file-for-mv-test.txt', '/tmp/test.txt');
+			expect(php.fileExists('/nodefs/tmp-file-for-mv-test.txt')).toEqual(
+				false
+			);
+			expect(php.fileExists('/tmp/test.txt')).toEqual(true);
+			expect(php.readFileAsText('/tmp/test.txt')).toEqual('contents');
 		});
 
 		it('mkdir() should create a directory', () => {
@@ -934,6 +966,16 @@ describe.each(SupportedPHPVersions)('PHP %s', (phpVersion) => {
 			expect(php.isDir(testFilePath)).toEqual(false);
 		});
 
+		it('isDir() should correctly distinguish between symlinks to a file and a directory', () => {
+			php.writeFile(testFilePath, 'Hello World!');
+			php.symlink(testFilePath, '/test-file-link');
+			php.mkdir(testDirPath);
+			php.symlink(testDirPath, '/test-dir-link');
+
+			expect(php.isDir('/test-file-link')).toEqual(false);
+			expect(php.isDir('/test-dir-link')).toEqual(true);
+		});
+
 		it('isFile() should correctly distinguish between a file and a directory', () => {
 			php.writeFile(testFilePath, 'Hello World!');
 			expect(php.fileExists(testFilePath)).toEqual(true);
@@ -942,6 +984,151 @@ describe.each(SupportedPHPVersions)('PHP %s', (phpVersion) => {
 			php.mkdir(testDirPath);
 			expect(php.fileExists(testDirPath)).toEqual(true);
 			expect(php.isFile(testDirPath)).toEqual(false);
+		});
+
+		it('isFile() should correctly distinguish between symlinks to a file and a directory', () => {
+			php.writeFile(testFilePath, 'Hello World!');
+			php.symlink(testFilePath, '/test-file-link');
+			php.mkdir(testDirPath);
+			php.symlink(testDirPath, '/test-dir-link');
+
+			expect(php.isFile('/test-file-link')).toEqual(true);
+			expect(php.isFile('/test-dir-link')).toEqual(false);
+		});
+
+		it('symlink() should create a symlink to a file', () => {
+			const filePath = `${testDirPath}/test.txt`;
+			const fileContent = 'link to me';
+			const linkPath = `${testDirPath}/test-link`;
+
+			php.mkdir(testDirPath);
+			php.writeFile(filePath, fileContent);
+			php.symlink(filePath, linkPath);
+
+			expect(php.readFileAsText(linkPath)).toEqual(fileContent);
+		});
+
+		it('symlink() should create a symlink to a directory', () => {
+			const testSubdirPath = `${testDirPath}/subdir`;
+			const filePath = `${testSubdirPath}/test.txt`;
+			const fileContent = 'Hello, World!';
+			const linkPath = `${testDirPath}/test-link`;
+
+			php.mkdir(testSubdirPath);
+			php.writeFile(filePath, fileContent);
+			php.symlink(testSubdirPath, linkPath);
+
+			expect(php.readFileAsText(`${linkPath}/test.txt`)).toEqual(
+				fileContent
+			);
+		});
+
+		it('symlink() should create a symlink to a symlink', () => {
+			const filePath = `${testDirPath}/test.txt`;
+			const fileContent = 'link to me';
+			const sourceLinkPath = `${testDirPath}/test-link`;
+			const linkToLinkPath = `${testDirPath}/test-link-to-link`;
+
+			php.mkdir(testDirPath);
+			php.writeFile(filePath, fileContent);
+			php.symlink(filePath, sourceLinkPath);
+			php.symlink(sourceLinkPath, linkToLinkPath);
+
+			expect(php.readFileAsText(linkToLinkPath)).toEqual(fileContent);
+		});
+
+		it('isSymlink() should return true for a path to a symlink', () => {
+			const filePath = `${testDirPath}/test.txt`;
+			const linkPath = `${testDirPath}/test-link`;
+
+			php.mkdir(testDirPath);
+			php.writeFile(filePath, '');
+			php.symlink(filePath, linkPath);
+
+			expect(php.isSymlink(linkPath)).toEqual(true);
+		});
+
+		it('isSymlink() should correctly distinguish between a symlink and a file', () => {
+			const filePath = `${testDirPath}/test.txt`;
+
+			php.mkdir(testDirPath);
+			php.writeFile(filePath, '');
+
+			expect(php.isSymlink(filePath)).toEqual(false);
+		});
+
+		it('isSymlink() should correctly distinguish between a symlink and a directory', () => {
+			php.mkdir(testDirPath);
+			expect(php.isSymlink(testDirPath)).toEqual(false);
+		});
+
+		it('readlink() should read symlink target', () => {
+			php.mkdir(testDirPath);
+			php.symlink(testDirPath, '/test-link');
+			expect(php.readlink('/test-link')).toEqual(testDirPath);
+		});
+
+		it('readlink() should throw when reading non-existent paths, files, or directories', () => {
+			expect(() => php.readlink('/non-existent')).toThrowError();
+
+			php.writeFile(testFilePath, 'Hello World!');
+			// confirm assumption that file exists
+			expect(php.isFile(testFilePath)).toEqual(true);
+			expect(() => php.readlink(testFilePath)).toThrowError();
+
+			php.mkdir(testDirPath);
+			// confirm assumption that dir exists
+			expect(php.isDir(testDirPath)).toEqual(true);
+			expect(() => php.readlink(testDirPath)).toThrowError();
+		});
+
+		it('realpath() should resolve symlink target', () => {
+			php.mkdir(testDirPath);
+			php.symlink(testDirPath, '/test-link');
+			expect(php.realpath('/test-link')).toEqual(testDirPath);
+		});
+
+		it('realpath() should resolve a path containing a symlinked directory', () => {
+			const testSubdirPath = `${testDirPath}/subdir`;
+			const targetFilePath = `${testSubdirPath}/test.txt`;
+			php.mkdir(testSubdirPath);
+			php.writeFile(targetFilePath, 'Hello World!');
+
+			const symlinkSubdirPath = `${testDirPath}/subdir-link`;
+			php.symlink(testSubdirPath, symlinkSubdirPath);
+
+			expect(php.realpath(`${symlinkSubdirPath}/test.txt`)).toEqual(
+				targetFilePath
+			);
+		});
+
+		it('realpath() should resolve a path containing a symlinked directory and a symlinked target', () => {
+			php.mkdir(testDirPath);
+
+			const testSubdirPath = `${testDirPath}/subdir`;
+			const targetFilePath = `${testSubdirPath}/test.txt`;
+			php.mkdir(testSubdirPath);
+			php.writeFile(targetFilePath, 'Hello World!');
+
+			const symlinkSubdirPath = `${testDirPath}/subdir-link`;
+			php.symlink(testSubdirPath, symlinkSubdirPath);
+			const symlinkTargetPath = `${symlinkSubdirPath}/test-link.txt`;
+			php.symlink(targetFilePath, symlinkTargetPath);
+
+			expect(php.realpath(symlinkTargetPath)).toEqual(targetFilePath);
+		});
+
+		it('realpath() should return the path itself if it does not contain a symlink', () => {
+			php.mkdir(testDirPath);
+
+			const filePath = `${testDirPath}/test.txt`;
+			php.writeFile(filePath, 'Hello World!');
+
+			expect(php.realpath(filePath)).toEqual(filePath);
+		});
+
+		it('realpath() should throw when unable to resolve path', () => {
+			expect(() => php.realpath('/non-existent')).toThrowError();
 		});
 
 		it('listFiles() should return a list of files in a directory', () => {
@@ -1205,7 +1392,7 @@ describe.each(SupportedPHPVersions)('PHP %s', (phpVersion) => {
 		/**
 		 * Issue https://github.com/WordPress/wordpress-playground/issues/169
 		 */
-		it('Should work with long POST body', () => {
+		it('Should work with long POST body', async () => {
 			php.writeFile(testScriptPath, '<?php echo "Hello world!"; ?>');
 			const body = new Uint8Array(
 				readFileSync(
@@ -1215,8 +1402,8 @@ describe.each(SupportedPHPVersions)('PHP %s', (phpVersion) => {
 			);
 			// 0x4000 is SAPI_POST_BLOCK_SIZE
 			expect(body.length).toBeGreaterThan(0x4000);
-			expect(async () => {
-				await php.run({
+			await expect(
+				php.run({
 					code: 'echo "A";',
 					relativeUri: '/test.php?a=b',
 					body,
@@ -1224,8 +1411,8 @@ describe.each(SupportedPHPVersions)('PHP %s', (phpVersion) => {
 					headers: {
 						'Content-Type': 'application/x-www-form-urlencoded',
 					},
-				});
-			}).not.toThrowError();
+				})
+			).resolves.not.toThrow();
 		});
 
 		it('Should run a script when no code snippet is provided', async () => {

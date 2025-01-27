@@ -4,7 +4,7 @@ import '@php-wasm/node-polyfills';
 export * from './lib/steps';
 export * from './lib/steps/handlers';
 export { runBlueprintSteps, compileBlueprint } from './lib/compile';
-export type { Blueprint } from './lib/blueprint';
+export type { Blueprint, PHPConstants } from './lib/blueprint';
 export type {
 	CompiledStep,
 	CompiledBlueprint,
@@ -17,13 +17,12 @@ export type {
 	CorePluginResource,
 	CoreThemeReference,
 	CoreThemeResource,
-	DecoratedResource,
+	ResourceDecorator,
 	FetchResource,
 	FileReference,
 	LiteralReference,
 	LiteralResource,
 	Resource,
-	ResourceOptions,
 	ResourceTypes,
 	SemaphoreResource,
 	UrlReference,

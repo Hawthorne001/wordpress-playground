@@ -13,6 +13,8 @@ packages/docs/site/src/model.json
 .docusaurus
 dist.zip
 rollup.d.ts
+.phpunit.cache
+packages/playground/data-liberation/vendor
 
 # dependencies
 node_modules
@@ -56,3 +58,6 @@ Thumbs.db
 
 # Playground artifacts
 php.js.bak
+**/test-results/
+**/playwright-report/
+**/blob-report/

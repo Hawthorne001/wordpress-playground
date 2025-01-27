@@ -1,4 +1,6 @@
 import {
+	GeneratedCertificate,
+	TCPOverFetchOptions,
 	MountDevice,
 	SyncProgressCallback,
 	createDirectoryHandleMountHandler,
@@ -23,7 +25,7 @@ import {
 	hasCachedStaticFilesRemovedFromMinifiedBuild,
 } from './worker-utils';
 import { EmscriptenDownloadMonitor } from '@php-wasm/progress';
-import { createMemoizedFetch } from './create-memoized-fetch';
+import { createMemoizedFetch } from '@wp-playground/common';
 import {
 	FilesystemOperation,
 	journalFSEvents,
@@ -48,6 +50,7 @@ import {
 } from '@wp-playground/wordpress';
 import { wpVersionToStaticAssetsDirectory } from '@wp-playground/wordpress-builds';
 import { logger } from '@php-wasm/logger';
+import { generateCertificate, certificateToPEM } from '@php-wasm/web';
 
 // post message to parent
 self.postMessage('worker-script-started');
@@ -68,11 +71,11 @@ export type WorkerBootOptions = {
 	wpVersion?: string;
 	phpVersion?: SupportedPHPVersion;
 	sapiName?: string;
-	phpExtensions?: string[];
 	scope: string;
 	withNetworking: boolean;
 	mounts?: Array<MountDescriptor>;
 	shouldInstallWordPress?: boolean;
+	corsProxyUrl?: string;
 };
 
 /** @inheritDoc PHPClient */
@@ -163,9 +166,10 @@ export class PlaygroundWorkerEndpoint extends PHPWorker {
 		mounts = [],
 		wpVersion = LatestMinifiedWordPressVersion,
 		phpVersion = '8.0',
-		phpExtensions = [],
 		sapiName = 'cli',
+		withNetworking = false,
 		shouldInstallWordPress = true,
+		corsProxyUrl,
 	}: WorkerBootOptions) {
 		if (this.booted) {
 			throw new Error('Playground already booted');
@@ -235,14 +239,47 @@ export class PlaygroundWorkerEndpoint extends PHPWorker {
 			// eslint-disable-next-line @typescript-eslint/no-this-alias
 			const endpoint = this;
 			const knownRemoteAssetPaths = new Set<string>();
+			const phpIniEntries: Record<string, string> = {
+				'openssl.cafile': '/internal/ca-bundle.crt',
+			};
+			let CAroot: false | GeneratedCertificate = false;
+			let tcpOverFetch: TCPOverFetchOptions | undefined = undefined;
+			if (withNetworking) {
+				/**
+				 * Generate a self-signed CA certificate and tell PHP to trust it.
+				 * This enables rewriting raw encrypted bytes emitted by PHP
+				 * during HTTPS connections into fetch() calls.
+				 *
+				 * See https://github.com/WordPress/wordpress-playground/pull/1926.
+				 */
+				CAroot = await generateCertificate({
+					subject: {
+						commonName: 'WordPressPlaygroundCA',
+						organizationName: 'WordPressPlaygroundCA',
+						countryName: 'US',
+					},
+					basicConstraints: {
+						ca: true,
+					},
+				});
+				tcpOverFetch = {
+					CAroot,
+					corsProxyUrl,
+				};
+			} else {
+				phpIniEntries['allow_url_fopen'] = '0';
+				// Calling curl_exec() with networking disabled causes PHP to
+				// enter an infinite loop. Let's disable it completely to
+				// throw a fatal error instead.
+				phpIniEntries['disable_functions'] =
+					'curl_exec,curl_multi_exec';
+			}
 			const requestHandler = await bootWordPress({
 				siteUrl: setURLScope(wordPressSiteUrl, scope).toString(),
 				createPhpRuntime: async () => {
 					let wasmUrl = '';
 					return await loadWebRuntime(phpVersion, {
-						// We don't yet support loading specific PHP extensions one-by-one.
-						// Let's just indicate whether we want to load all of them.
-						loadAllExtensions: phpExtensions.length > 0,
+						tcpOverFetch,
 						emscriptenOptions: {
 							instantiateWasm(imports, receiveInstance) {
 								// Using .then because Emscripten typically returns an empty
@@ -306,7 +343,11 @@ export class PlaygroundWorkerEndpoint extends PHPWorker {
 						}
 					},
 				},
+				phpIniEntries,
 				createFiles: {
+					'/internal/ca-bundle.crt': CAroot
+						? certificateToPEM(CAroot.certificate)
+						: '',
 					'/internal/shared/mu-plugins': {
 						'1-playground-web.php': playgroundWebMuPlugin,
 						'playground-includes': {

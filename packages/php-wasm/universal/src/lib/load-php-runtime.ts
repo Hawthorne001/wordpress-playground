@@ -1,4 +1,5 @@
 import { logger } from '@php-wasm/logger';
+import { IncomingMessage, Server, ServerResponse } from 'http';
 
 const RuntimeId = Symbol('RuntimeId');
 const loadedRuntimes: Map<number, PHPRuntime> = new Map();
@@ -156,10 +157,15 @@ export async function loadPHPRuntime(
 
 	const id = ++lastRuntimeId;
 
+	PHPRuntime.FS;
 	PHPRuntime.id = id;
 	PHPRuntime.originalExit = PHPRuntime._exit;
 
 	PHPRuntime._exit = function (code: number) {
+		if (PHPRuntime.outboundNetworkProxyServer) {
+			PHPRuntime.outboundNetworkProxyServer.close();
+			PHPRuntime.outboundNetworkProxyServer.closeAllConnections();
+		}
 		loadedRuntimes.delete(id);
 		return PHPRuntime.originalExit(code);
 	};
@@ -238,6 +244,10 @@ export type EmscriptenOptions = {
 	onRuntimeInitialized?: () => void;
 	monitorRunDependencies?: (left: number) => void;
 	onMessage?: (listener: EmscriptenMessageListener) => void;
+	outboundNetworkProxyServer?: Server<
+		typeof IncomingMessage,
+		typeof ServerResponse
+	>;
 	instantiateWasm?: (
 		info: WebAssembly.Imports,
 		receiveInstance: (
