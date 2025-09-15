@@ -9,6 +9,19 @@ All notable changes to this project are documented in this file by a CI job
 that runs on every NPM release. The file follows the [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)
 format.
 
+## [v2.0.21] (2025-09-15) 
+
+### Enhancements
+
+- [CLI] Build worker thread with stable filenames. ([#2631](https://github.com/WordPress/wordpress-playground/pull/2631))
+
+### Contributors
+
+The following contributors merged PRs in this release:
+
+@adamziel
+
+
 ## [v2.0.20] (2025-09-15) 
 
 ### Tools
